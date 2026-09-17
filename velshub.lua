@@ -1,44 +1,48 @@
 -- ================================================
--- VelsHub v3.0.1 | Supabase Auth + Dual Method Aimbot + Wall-Pen ESP
+-- VelsHub v3.1 | Supabase Auth + Stealth ESP + User Panel
 -- ================================================
 -- Changelog:
---   v3.0: Supabase REST auth, dual-method aimbot, wall pen ESP
---   v3.0.1: pake `request` (bukan HttpService:RequestAsync),
---           emoji dihilangkan, fix executor Real support
+--   v3.0.1: request fallback, no emoji
+--   v3.1:   all features OFF by default, Highlight instead of
+--           SelectionBox (anti instance-scanner), user info panel,
+--           all English UI, admin tab for admin users
 
 local CONFIG = {
     SupabaseURL = "https://glkrwegvlmowprdbobkc.supabase.co",
     SupabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdsa3J3ZWd2bG1vd3ByZGJvYmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NDEwOTgsImV4cCI6MjEwNTIxNzA5OH0.229jGLrrhuFJwp8GUpMzhTIhWqAdgCggYHB2SNF4BNc",
 
     ESP = {
-        Enabled       = true,
-        Box           = true,
-        Name          = true,
-        Skeleton      = true,
-        HealthBar     = true,
-        WallPenetration = true,
-        BoxColor      = Color3.fromRGB(220, 100, 180),
-        NameColor     = Color3.fromRGB(255, 180, 230),
-        SkeletonColor = Color3.fromRGB(180, 80, 220),
-        WallPenColor  = Color3.fromRGB(255, 100, 100),
-        TeamCheck     = false,
+        Enabled         = false,
+        Box             = false,
+        Name            = false,
+        Skeleton        = false,
+        HealthBar       = false,
+        Highlight       = false,
+        HighlightMode   = "Outline",
+        WallPenetration = false,
+        BoxColor        = Color3.fromRGB(220, 100, 180),
+        NameColor       = Color3.fromRGB(255, 180, 230),
+        SkeletonColor   = Color3.fromRGB(180, 80, 220),
+        HighlightColor  = Color3.fromRGB(180, 60, 200),
+        WallPenColor    = Color3.fromRGB(255, 100, 100),
+        TeamCheck       = false,
     },
 
     Aimbot = {
-        Enabled        = true,
+        Enabled        = false,
         Method         = "Camera",
         TriggerKey     = Enum.UserInputType.MouseButton2,
         Toggle         = false,
         LockPart       = "Head",
         Smoothness     = 0.12,
-        OffsetToMove   = true,
+        OffsetToMove   = false,
         OffsetAmount   = 15,
 
         TeamCheck      = false,
         AliveCheck     = true,
-        WallCheck      = true,
+        WallCheck      = false,
 
-        FOVEnabled     = true,
+        FOVEnabled     = false,
         FOV            = 180,
         FOVColor       = Color3.fromRGB(220, 100, 180),
         FOVLockedColor = Color3.fromRGB(255, 80, 120),
@@ -46,7 +50,7 @@ local CONFIG = {
         FOVTransparency = 0.3,
         FOVFilled      = false,
 
-        TracerEnabled  = true,
+        TracerEnabled  = false,
         TracerColor    = Color3.fromRGB(220, 100, 180),
         TracerThickness = 1.5,
 
@@ -85,6 +89,7 @@ local Pal = {
     Success     = Color3.fromRGB(100, 220, 150),
     Error       = Color3.fromRGB(255, 80, 120),
     Shadow      = Color3.fromRGB(6, 3, 12),
+    Gold        = Color3.fromRGB(255, 200, 90),
 }
 
 local Players          = game:GetService("Players")
@@ -122,7 +127,7 @@ end
 local HasDrawing = (Drawing and Drawing.new) ~= nil
 
 -- ================================================
--- AUTH -- Supabase REST via `request`
+-- AUTH - Supabase REST via request
 -- ================================================
 
 local CurrentUser = nil
@@ -136,47 +141,30 @@ local function SupabaseReq(method, path, body)
         ["Prefer"]        = "return=representation",
     }
 
-    local payload = {
-        Url = url,
-        Method = method,
-        Headers = headers,
-    }
-    if body then
-        payload.Body = HttpService:JSONEncode(body)
-    end
+    local payload = { Url = url, Method = method, Headers = headers }
+    if body then payload.Body = HttpService:JSONEncode(body) end
 
-    -- pilih executor request fn
     local fn = nil
     if request then fn = request
     elseif http and http.request then fn = http.request
     elseif syn and syn.request then fn = syn.request
     end
 
-    if not fn then
-        return false, "Executor tidak support HTTP request"
-    end
+    if not fn then return false, "No HTTP request function available" end
 
     local ok, res = pcall(fn, payload)
-    if not ok then
-        return false, "Request error: " .. tostring(res)
-    end
-    if type(res) ~= "table" then
-        return false, "Invalid response"
-    end
-    if not res.Success then
-        return false, "Server " .. tostring(res.StatusCode) .. ": " .. tostring(res.Body)
-    end
+    if not ok then return false, "Request error: " .. tostring(res) end
+    if type(res) ~= "table" then return false, "Invalid response" end
+    if not res.Success then return false, "Server " .. tostring(res.StatusCode) .. ": " .. tostring(res.Body) end
 
     local ok2, data = pcall(HttpService.JSONDecode, HttpService, res.Body)
-    if not ok2 then
-        return false, "Parse error: " .. tostring(res.Body)
-    end
+    if not ok2 then return false, "Parse error: " .. tostring(res.Body) end
 
     return true, data
 end
 
 local function SupabaseLogin(u, p)
-    if u == "" or p == "" then return false, "kosong" end
+    if u == "" or p == "" then return false, "empty" end
     local path = string.format(
         "accounts?username=eq.%s&password=eq.%s&select=*",
         HttpService:UrlEncode(u), HttpService:UrlEncode(p)
@@ -184,22 +172,26 @@ local function SupabaseLogin(u, p)
     local ok, data = SupabaseReq("GET", path)
     if not ok then return false, tostring(data) end
     if type(data) ~= "table" or #data == 0 then
-        return false, "User/pass salah"
+        return false, "wrong username or password"
     end
-    CurrentUser = { username = data[1].username, isAdmin = data[1].is_admin == true }
+    CurrentUser = {
+        username = data[1].username,
+        isAdmin  = data[1].is_admin == true,
+        created  = data[1].created_at or "-",
+    }
     return true, "Welcome, " .. CurrentUser.username
 end
 
 local function SupabaseRegister(u, p)
-    if u == "" or p == "" then return false, "kosong" end
-    if #u < 3 then return false, "username minimal 3 char" end
-    if #p < 3 then return false, "password minimal 3 char" end
+    if u == "" or p == "" then return false, "empty" end
+    if #u < 3 then return false, "username min 3 chars" end
+    if #p < 3 then return false, "password min 3 chars" end
 
     local ok, data = SupabaseReq("GET", string.format(
         "accounts?username=eq.%s&select=id", HttpService:UrlEncode(u)
     ))
     if ok and type(data) == "table" and #data > 0 then
-        return false, "Username sudah ada"
+        return false, "username already taken"
     end
 
     local ok2, res = SupabaseReq("POST", "accounts", {
@@ -208,8 +200,22 @@ local function SupabaseRegister(u, p)
         is_admin = false,
     })
     if not ok2 then return false, tostring(res) end
+    return true, "account created"
+end
 
-    return true, "Akun dibuat, silakan login"
+-- admin only
+local function SupabaseListUsers()
+    local ok, data = SupabaseReq("GET", "accounts?select=username,is_admin,created_at&order=id.asc")
+    if not ok then return false, tostring(data) end
+    return true, data
+end
+
+local function SupabaseSetAdmin(u, v)
+    local ok, res = SupabaseReq("PATCH",
+        string.format("accounts?username=eq.%s", HttpService:UrlEncode(u)),
+        { is_admin = v })
+    if not ok then return false, tostring(res) end
+    return true, "updated"
 end
 
 -- ================================================
@@ -409,29 +415,22 @@ task.spawn(function()
     }):Play()
 end)
 
-local LogoBtn = Label(LoginCard, "⬡", UDim2.new(0,0,0,18), UDim2.new(1,0,0,56), Pal.AccentAlt, 48, Enum.TextXAlignment.Center)
+local LogoBtn = Label(LoginCard, "V", UDim2.new(0,0,0,18), UDim2.new(1,0,0,56), Pal.AccentAlt, 40, Enum.TextXAlignment.Center)
+LogoBtn.Font = Enum.Font.GothamBold
 LogoBtn.ZIndex = 6
-task.spawn(function()
-    local rot = 0
-    while LoginGui.Parent do
-        rot = (rot + 0.8) % 360
-        LogoBtn.Rotation = rot
-        task.wait(0.016)
-    end
-end)
 
-local TitleLabel = BoldLabel(LoginCard, "VelsHub v3.0.1", UDim2.new(0,0,0,80), UDim2.new(1,0,0,26), Pal.Text, 20, Enum.TextXAlignment.Center)
+local TitleLabel = BoldLabel(LoginCard, "VelsHub v3.1", UDim2.new(0,0,0,80), UDim2.new(1,0,0,26), Pal.Text, 20, Enum.TextXAlignment.Center)
 TitleLabel.ZIndex = 6
-local SubLabel = Label(LoginCard, "login ke supabase", UDim2.new(0,0,0,104), UDim2.new(1,0,0,16), Pal.TextDim, 11, Enum.TextXAlignment.Center)
+local SubLabel = Label(LoginCard, "sign in to continue", UDim2.new(0,0,0,104), UDim2.new(1,0,0,16), Pal.TextDim, 11, Enum.TextXAlignment.Center)
 SubLabel.ZIndex = 6
 
 Label(LoginCard, "Username", UDim2.new(0,20,0,132), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
-local LoginUserBox = TextBox(LoginCard, "", UDim2.new(1,-40,0,34))
+local LoginUserBox = TextBox(LoginCard, "username", UDim2.new(1,-40,0,34))
 LoginUserBox.Position = UDim2.new(0,20,0,148)
 LoginUserBox.ZIndex = 6
 
 Label(LoginCard, "Password", UDim2.new(0,20,0,190), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
-local LoginPassBox = TextBox(LoginCard, "", UDim2.new(1,-40,0,34))
+local LoginPassBox = TextBox(LoginCard, "password", UDim2.new(1,-40,0,34))
 LoginPassBox.Position = UDim2.new(0,20,0,206)
 LoginPassBox.ZIndex = 6
 
@@ -442,7 +441,7 @@ local HubLoader
 
 local LoginBtn = Button(LoginCard, "Login", UDim2.new(1,-40,0,36), function()
     LoginStatus.TextColor3 = Pal.TextDim
-    LoginStatus.Text = "..."
+    LoginStatus.Text = "checking..."
     task.spawn(function()
         local ok, msg = SupabaseLogin(LoginUserBox.Text, LoginPassBox.Text)
         LoginStatus.TextColor3 = ok and Pal.Success or Pal.Error
@@ -490,7 +489,8 @@ HubLoader = function()
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent         = CoreGui
 
-    local WIN_W, WIN_H = 620, 480
+    -- main window
+    local WIN_W, WIN_H = 780, 500
 
     local Shadow = Frame(ScreenGui, UDim2.new(0,WIN_W+12,0,WIN_H+12),
         UDim2.new(0.5,-(WIN_W+12)/2, 0.5,-(WIN_H+12)/2), Pal.Shadow, 0.35)
@@ -518,9 +518,9 @@ HubLoader = function()
         g.Parent = al
     end
 
-    BoldLabel(TitleBar, "VelsHub", UDim2.new(0,16,0,0), UDim2.new(0,200,1,0), Pal.Text, 14)
-    Label(TitleBar, "v3.0.1 | " .. ExecutorName .. " (" .. ExecutorLevel .. ")", UDim2.new(0,90,0,0), UDim2.new(0,220,1,0), Pal.TextMute, 10)
-    Label(TitleBar, "[K]", UDim2.new(1,-100,0,0), UDim2.new(0,30,1,0), Pal.TextMute, 10, Enum.TextXAlignment.Center)
+    BoldLabel(TitleBar, "VelsHub", UDim2.new(0,16,0,0), UDim2.new(0,100,1,0), Pal.Text, 14)
+    Label(TitleBar, "v3.1", UDim2.new(0,80,0,0), UDim2.new(0,40,1,0), Pal.TextMute, 10)
+    Label(TitleBar, "[K] toggle", UDim2.new(1,-140,0,0), UDim2.new(0,80,1,0), Pal.TextMute, 10, Enum.TextXAlignment.Center)
 
     local MinBtn = Instance.new("TextButton")
     MinBtn.Size = UDim2.new(0,28,0,28)
@@ -568,7 +568,67 @@ HubLoader = function()
         end)
     end
 
-    local SidebarW = 150
+    -- ================================================
+    -- USER INFO PANEL (right side)
+    -- ================================================
+
+    local PanelW = 180
+    local InfoPanel = Frame(Main,
+        UDim2.new(0, PanelW, 1, -60),
+        UDim2.new(1, -PanelW - 10, 0, 40),
+        Pal.Sidebar, 0.2)
+    Corner(InfoPanel, 10)
+    Pad(InfoPanel, 12, 12, 12, 12)
+
+    local infoTitle = BoldLabel(InfoPanel, "USER INFO", UDim2.new(0,0,0,0), UDim2.new(1,0,0,16), Pal.Accent, 11)
+    Frame(InfoPanel, UDim2.new(1,0,0,1), UDim2.new(0,0,0,22), Pal.BorderSoft, 0.3)
+
+    local function InfoRow(y, key, val, valColor)
+        Label(InfoPanel, key, UDim2.new(0,0,0,y), UDim2.new(1,0,0,14), Pal.TextMute, 10)
+        local v = BoldLabel(InfoPanel, val, UDim2.new(0,0,0,y+14), UDim2.new(1,0,0,16), valColor or Pal.Text, 11)
+        v.TextTruncate = Enum.TextTruncate.AtEnd
+        return v
+    end
+
+    InfoRow(32, "Username", CurrentUser.username, Pal.Text)
+    InfoRow(70, "License", CurrentUser.isAdmin and "ADMIN" or "MEMBER", CurrentUser.isAdmin and Pal.Gold or Pal.Success)
+    InfoRow(108, "Executor", ExecutorName, Pal.Text)
+    InfoRow(146, "Exec Level", ExecutorLevel, ExecutorLevel == "High" and Pal.Success or Pal.TextDim)
+
+    -- status indicator
+    local statusDot = Frame(InfoPanel, UDim2.new(0,8,0,8), UDim2.new(0,0,0,190), Pal.Success)
+    Corner(statusDot, 4)
+    Label(InfoPanel, "online", UDim2.new(0,14,0,187), UDim2.new(1,-14,0,14), Pal.TextDim, 10)
+
+    -- logout
+    local LogoutBtn = Instance.new("TextButton")
+    LogoutBtn.Size = UDim2.new(1,0,0,28)
+    LogoutBtn.Position = UDim2.new(0,0,1,-28)
+    LogoutBtn.BackgroundColor3 = Pal.Card
+    LogoutBtn.TextColor3 = Pal.TextDim
+    LogoutBtn.Font = Enum.Font.GothamBold
+    LogoutBtn.TextSize = 11
+    LogoutBtn.Text = "Logout"
+    LogoutBtn.BorderSizePixel = 0
+    LogoutBtn.AutoButtonColor = false
+    LogoutBtn.Parent = InfoPanel
+    Corner(LogoutBtn, 6)
+    LogoutBtn.MouseEnter:Connect(function()
+        TweenService:Create(LogoutBtn, TweenInfo.new(0.15), { BackgroundColor3 = Pal.Error, TextColor3 = Color3.fromRGB(255,255,255) }):Play()
+    end)
+    LogoutBtn.MouseLeave:Connect(function()
+        TweenService:Create(LogoutBtn, TweenInfo.new(0.15), { BackgroundColor3 = Pal.Card, TextColor3 = Pal.TextDim }):Play()
+    end)
+    LogoutBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+        CurrentUser = nil
+    end)
+
+    -- ================================================
+    -- SIDEBAR
+    -- ================================================
+
+    local SidebarW = 140
     local Sidebar = Frame(Main, UDim2.new(0,SidebarW, 1,-60), UDim2.new(0,0,0,40), Pal.Sidebar, 0.2)
     Corner(Sidebar, 10)
     Pad(Sidebar, 10, 8, 10, 8)
@@ -579,7 +639,8 @@ HubLoader = function()
     sl.Parent = Sidebar
 
     local ContentX = SidebarW + 20
-    local Content = Frame(Main, UDim2.new(1,-ContentX-20, 1,-60), UDim2.new(0,ContentX,0,40), Pal.Window, 1)
+    local ContentW = WIN_W - ContentX - PanelW - 30
+    local Content = Frame(Main, UDim2.new(0,ContentW, 1,-60), UDim2.new(0,ContentX,0,40), Pal.Window, 1)
 
     local Pages, TabBtns = {}, {}
 
@@ -619,7 +680,10 @@ HubLoader = function()
         end
     end
 
-    for _, name in ipairs({"Visual","Combat","Misc","World"}) do
+    local tabList = {"Visual","Combat","Misc","World"}
+    if CurrentUser.isAdmin then
+        table.insert(tabList, "Admin")
+    end    for _, name in ipairs(tabList) do
         MakePage(name)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1,0,0,32)
@@ -633,11 +697,12 @@ HubLoader = function()
         bar.Name = "__bar"
         bar.Visible = false
         Corner(bar, 2)
-        local lbl = BoldLabel(btn, name, UDim2.new(0,16,0,0), UDim2.new(1,-16,1,0), Pal.TextDim, 12)
+        BoldLabel(btn, name, UDim2.new(0,16,0,0), UDim2.new(1,-16,1,0), Pal.TextDim, 12)
         TabBtns[name] = btn
         btn.MouseButton1Click:Connect(function() SwitchTab(name) end)
     end
 
+    -- widgets
     local function Section(parent, title)
         local s = Frame(parent, UDim2.new(1,0,0,0), nil, Pal.Card)
         Corner(s, 10)
@@ -651,7 +716,7 @@ HubLoader = function()
 
         local head = Frame(s, UDim2.new(1,0,0,20), nil, Color3.fromRGB(0,0,0), 1)
         head.LayoutOrder = 0
-        BoldLabel(head, title:upper(), UDim2.new(0,0,0,0), UDim2.new(1,-20,1,0), Pal.Accent, 11)
+        BoldLabel(head, string.upper(title), UDim2.new(0,0,0,0), UDim2.new(1,-20,1,0), Pal.Accent, 11)
 
         local arrow = Label(head, "v", UDim2.new(1,-14,0,0), UDim2.new(0,14,1,0), Pal.TextMute, 12, Enum.TextXAlignment.Center)
         arrow.Font = Enum.Font.GothamBold
@@ -759,6 +824,7 @@ HubLoader = function()
         return w
     end
 
+    -- K toggle
     local GuiVisible = true
     local function SetGuiVisible(state)
         GuiVisible = state
@@ -796,40 +862,42 @@ HubLoader = function()
     end)
 
     -- ================================================
-    -- VISUAL -- ESP
+    -- VISUAL
     -- ================================================
 
     local VP = Pages["Visual"]
     local espSec = Section(VP, "ESP")
-    Toggle(espSec, "ESP Master",      CONFIG.ESP.Enabled,       function(v) CONFIG.ESP.Enabled = v end)
-    Toggle(espSec, "Box",             CONFIG.ESP.Box,           function(v) CONFIG.ESP.Box = v end)
-    Toggle(espSec, "Name",            CONFIG.ESP.Name,          function(v) CONFIG.ESP.Name = v end)
-    Toggle(espSec, "Skeleton",        CONFIG.ESP.Skeleton,      function(v) CONFIG.ESP.Skeleton = v end)
-    Toggle(espSec, "Health Bar",      CONFIG.ESP.HealthBar,     function(v) CONFIG.ESP.HealthBar = v end)
+    Toggle(espSec, "ESP Master",       CONFIG.ESP.Enabled,         function(v) CONFIG.ESP.Enabled = v end)
+    Toggle(espSec, "Box",              CONFIG.ESP.Box,             function(v) CONFIG.ESP.Box = v end)
+    Toggle(espSec, "Name",             CONFIG.ESP.Name,            function(v) CONFIG.ESP.Name = v end)
+    Toggle(espSec, "Skeleton",         CONFIG.ESP.Skeleton,        function(v) CONFIG.ESP.Skeleton = v end)
+    Toggle(espSec, "Health Bar",       CONFIG.ESP.HealthBar,       function(v) CONFIG.ESP.HealthBar = v end)
+    Toggle(espSec, "Highlight (stealth)", CONFIG.ESP.Highlight,    function(v) CONFIG.ESP.Highlight = v end)
     Toggle(espSec, "Wall Penetration", CONFIG.ESP.WallPenetration, function(v) CONFIG.ESP.WallPenetration = v end)
-    Toggle(espSec, "Team Check",      CONFIG.ESP.TeamCheck,     function(v) CONFIG.ESP.TeamCheck = v end)
+    Toggle(espSec, "Team Check",       CONFIG.ESP.TeamCheck,       function(v) CONFIG.ESP.TeamCheck = v end)
+
+    local hlSec = Section(VP, "Highlight Mode")
+    Dropdown(hlSec, "Mode", {"Outline", "Fill", "Both"}, CONFIG.ESP.HighlightMode,
+        function(v) CONFIG.ESP.HighlightMode = v end)
 
     -- ================================================
-    -- COMBAT -- AIMBOT
+    -- COMBAT
     -- ================================================
 
     local CP = Pages["Combat"]
 
     local methodSec = Section(CP, "Aimbot Method")
-    Label(methodSec, "High = silent aim (hook). Low = camera lock (aman).",
+    Label(methodSec, "High = silent aim (hook). Low = camera lock.",
         UDim2.new(0,0,0,0), UDim2.new(1,0,0,28), Pal.TextMute, 10).TextWrapped = true
-    Dropdown(methodSec, "Method", {"Camera", "Silent"}, CONFIG.Aimbot.Method,
-        function(v)
-            CONFIG.Aimbot.Method = v
-            if v == "Silent" and ExecutorLevel ~= "High" then
-                CONFIG.Aimbot.Method = "Camera"
-            end
-        end)
+    Dropdown(methodSec, "Method", {"Camera", "Silent"}, CONFIG.Aimbot.Method, function(v)
+        CONFIG.Aimbot.Method = v
+        if v == "Silent" and ExecutorLevel ~= "High" then
+            CONFIG.Aimbot.Method = "Camera"
+        end
+    end)
 
     local aimSec = Section(CP, "Aimbot")
-    Toggle(aimSec, "Aimbot Master", CONFIG.Aimbot.Enabled, function(v)
-        CONFIG.Aimbot.Enabled = v
-    end)
+    Toggle(aimSec, "Aimbot Master", CONFIG.Aimbot.Enabled, function(v) CONFIG.Aimbot.Enabled = v end)
     Toggle(aimSec, "Toggle Mode (RMB)", CONFIG.Aimbot.Toggle, function(v) CONFIG.Aimbot.Toggle = v end)
     Toggle(aimSec, "Wall Check",    CONFIG.Aimbot.WallCheck, function(v) CONFIG.Aimbot.WallCheck = v end)
     Toggle(aimSec, "Team Check",    CONFIG.Aimbot.TeamCheck, function(v) CONFIG.Aimbot.TeamCheck = v end)
@@ -887,10 +955,109 @@ HubLoader = function()
     end)
 
     -- ================================================
-    -- ESP LOOPS
+    -- ADMIN (admin only)
+    -- ================================================
+
+    if CurrentUser.isAdmin and Pages["Admin"] then
+        local AP = Pages["Admin"]
+        local adminSec = Section(AP, "User Manager")
+
+        Label(adminSec, "Target Username", UDim2.new(0,0,0,0), UDim2.new(1,0,0,14), Pal.TextDim, 10)
+        local targetBox = TextBox(adminSec, "username", UDim2.new(1,0,0,32))
+
+        local statusLbl = Label(adminSec, "", UDim2.new(0,0,0,0), UDim2.new(1,0,0,14), Pal.TextMute, 10, Enum.TextXAlignment.Center)
+
+        local btnRow = Frame(adminSec, UDim2.new(1,0,0,32), nil, Color3.fromRGB(0,0,0), 1)
+        local function SmallBtn(text, xScale, cb)
+            local b = Instance.new("TextButton")
+            b.Size = UDim2.new(0.32, 0, 1, 0)
+            b.Position = UDim2.new(xScale, 0, 0, 0)
+            b.BackgroundColor3 = Pal.AccentSoft
+            b.TextColor3 = Color3.fromRGB(255,255,255)
+            b.Font = Enum.Font.GothamBold
+            b.TextSize = 11
+            b.Text = text
+            b.BorderSizePixel = 0
+            b.AutoButtonColor = false
+            b.Parent = btnRow
+            Corner(b, 6)
+            b.MouseEnter:Connect(function()
+                TweenService:Create(b, TweenInfo.new(0.15), { BackgroundColor3 = Pal.Accent }):Play()
+            end)
+            b.MouseLeave:Connect(function()
+                TweenService:Create(b, TweenInfo.new(0.15), { BackgroundColor3 = Pal.AccentSoft }):Play()
+            end)
+            b.MouseButton1Click:Connect(cb)
+            return b
+        end
+        SmallBtn("Promote", 0.0, function()
+            local u = targetBox.Text
+            if u == "" then statusLbl.Text = "enter username"; return end
+            local ok, msg = SupabaseSetAdmin(u, true)
+            statusLbl.Text = (ok and "promoted: " or "error: ") .. tostring(msg)
+            statusLbl.TextColor3 = ok and Pal.Success or Pal.Error
+        end)
+        SmallBtn("Demote", 0.34, function()
+            local u = targetBox.Text
+            if u == "" then statusLbl.Text = "enter username"; return end
+            local ok, msg = SupabaseSetAdmin(u, false)
+            statusLbl.Text = (ok and "demoted: " or "error: ") .. tostring(msg)
+            statusLbl.TextColor3 = ok and Pal.Success or Pal.Error
+        end)
+        SmallBtn("Refresh", 0.68, function()
+            local ok, data = SupabaseListUsers()
+            if not ok then
+                statusLbl.Text = "error: " .. tostring(data)
+                statusLbl.TextColor3 = Pal.Error
+                return
+            end
+            local lines = {}
+            for i, u in ipairs(data) do
+                lines[i] = string.format("%s%s", u.username, u.is_admin and " [ADMIN]" or "")
+            end
+            statusLbl.Text = table.concat(lines, "  |  ")
+            statusLbl.TextColor3 = Pal.Text
+        end)
+
+        Label(adminSec, "User List", UDim2.new(0,0,0,0), UDim2.new(1,0,0,14), Pal.TextDim, 10)
+        local listLbl = Label(adminSec, "(click refresh)", UDim2.new(0,0,0,0), UDim2.new(1,0,0,80), Pal.TextDim, 10)
+        listLbl.TextWrapped = true
+        listLbl.TextYAlignment = Enum.TextYAlignment.Top
+
+        local btnRow2 = Frame(adminSec, UDim2.new(1,0,0,32), nil, Color3.fromRGB(0,0,0), 1)
+        local refreshBig = Instance.new("TextButton")
+        refreshBig.Size = UDim2.new(1,0,1,0)
+        refreshBig.BackgroundColor3 = Pal.AccentSoft
+        refreshBig.TextColor3 = Color3.fromRGB(255,255,255)
+        refreshBig.Font = Enum.Font.GothamBold
+        refreshBig.TextSize = 11
+        refreshBig.Text = "Refresh User List"
+        refreshBig.BorderSizePixel = 0
+        refreshBig.AutoButtonColor = false
+        refreshBig.Parent = btnRow2
+        Corner(refreshBig, 6)
+        refreshBig.MouseButton1Click:Connect(function()
+            local ok, data = SupabaseListUsers()
+            if not ok then
+                listLbl.Text = "error: " .. tostring(data)
+                return
+            end
+            local lines = {}
+            for _, u in ipairs(data) do
+                local tier = u.is_admin and " [ADMIN]" or " [MEMBER]"
+                lines[#lines+1] = string.format("- %s%s", u.username, tier)
+            end
+            listLbl.Text = table.concat(lines, "\n")
+        end)
+    end
+
+    -- ================================================
+    -- ESP
     -- ================================================
 
     local ESPCache = {}
+    local HighlightCache = {}
+
     local SkeletonBones = {
         {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
         {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
@@ -944,31 +1111,22 @@ HubLoader = function()
         return found, mnx, mny, mxx, mxy
     end
 
-    local function ApplyChams(char, color, thick)
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") and not p:FindFirstChild("__VelsChams") then
-                local sb = Instance.new("SelectionBox")
-                sb.Name = "__VelsChams"
-                sb.Adornee = p
-                sb.Color3 = color
-                sb.LineThickness = thick or 0.05
-                sb.SurfaceTransparency = 0.5
-                sb.SurfaceColor3 = color
-                sb.Parent = p
-            end
-        end
+    -- Highlight: parent di ScreenGui, adornee di character
+    local function GetHighlight(player)
+        local hl = HighlightCache[player]
+        if hl and hl.Parent then return hl end
+        hl = Instance.new("Highlight")
+        hl.Name = "__VelsHL"
+        hl.FillTransparency = 0.5
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- wall pen
+        hl.Parent = ScreenGui
+        HighlightCache[player] = hl
+        return hl
     end
-    local function UpdateChamsColor(char, color)
-        for _, p in ipairs(char:GetDescendants()) do
-            local sb = p:FindFirstChild("__VelsChams")
-            if sb then sb.Color3 = color; sb.SurfaceColor3 = color end
-        end
-    end
-    local function RemoveChams(char)
-        for _, p in ipairs(char:GetDescendants()) do
-            local sb = p:FindFirstChild("__VelsChams")
-            if sb then sb:Destroy() end
-        end
+    local function RemoveHighlight(player)
+        local hl = HighlightCache[player]
+        if hl then hl:Destroy(); HighlightCache[player] = nil end
     end
 
     local function IsESPTeammate(p)
@@ -978,8 +1136,6 @@ HubLoader = function()
 
     local function IsVisible(char, targetPos)
         if not char then return false end
-        local root = char:FindFirstChild("Head") or char:FindFirstChild("UpperTorso")
-        if not root then return false end
         local dir = (targetPos - Camera.CFrame.Position)
         local params = RaycastParams.new()
         params.FilterType = Enum.RaycastFilterType.Exclude
@@ -1013,8 +1169,25 @@ HubLoader = function()
                     obj.Box.Visible = false; obj.BoxOutline.Visible = false
                     obj.Name.Visible = false; obj.Health.Visible = false; obj.HealthBG.Visible = false
                     for _, b in ipairs(obj.Bones) do b.Visible = false end
-                    if char then RemoveChams(char) end
+                    RemoveHighlight(player)
                     continue
+                end
+
+                -- highlight (stealth, parent di ScreenGui)
+                if CONFIG.ESP.Highlight then
+                    local hl = GetHighlight(player)
+                    hl.Adornee = char
+                    local c = CONFIG.Misc.RainbowESP and rb or CONFIG.ESP.HighlightColor
+                    hl.FillColor = c
+                    hl.OutlineColor = c
+                    local m = CONFIG.ESP.HighlightMode
+                    hl.FillTransparency = (m == "Outline") and 1 or 0.5
+                    hl.OutlineTransparency = (m == "Fill") and 1 or 0
+                    hl.DepthMode = CONFIG.ESP.WallPenetration
+                        and Enum.HighlightDepthMode.AlwaysOnTop
+                        or Enum.HighlightDepthMode.Occluded
+                else
+                    RemoveHighlight(player)
                 end
 
                 local on, mnx, mny, mxx, mxy = GetScreenBounds(char)
@@ -1037,20 +1210,15 @@ HubLoader = function()
                     obj.Box.Visible = false; obj.BoxOutline.Visible = false
                     obj.Name.Visible = false; obj.Health.Visible = false; obj.HealthBG.Visible = false
                     for _, b in ipairs(obj.Bones) do b.Visible = false end
-                    if char then RemoveChams(char) end
                     continue
                 end
 
                 local boxColor = CONFIG.ESP.BoxColor
                 local nameColor = CONFIG.ESP.NameColor
                 local skelColor = CONFIG.ESP.SkeletonColor
-                if not visible then
-                    boxColor = CONFIG.ESP.WallPenColor
-                end
+                if not visible then boxColor = CONFIG.ESP.WallPenColor end
                 if CONFIG.Misc.RainbowESP then
-                    boxColor = rb
-                    nameColor = rb
-                    skelColor = rb
+                    boxColor = rb; nameColor = rb; skelColor = rb
                 end
 
                 obj.BoxOutline.Visible  = CONFIG.ESP.Box
@@ -1100,31 +1268,17 @@ HubLoader = function()
                 else
                     for _, b in ipairs(obj.Bones) do b.Visible = false end
                 end
-
-                if CONFIG.ESP.WallPenetration or visible then
-                    local chamsColor = CONFIG.Misc.RainbowESP and rb or boxColor
-                    local existing = false
-                    for _, p in ipairs(char:GetDescendants()) do
-                        if p:FindFirstChild("__VelsChams") then existing = true break end
-                    end
-                    if existing then UpdateChamsColor(char, chamsColor)
-                    else ApplyChams(char, chamsColor, visible and 0.05 or 0.15) end
-                else
-                    RemoveChams(char)
-                end
             end
         end)
 
         Players.PlayerRemoving:Connect(function(p)
-            if ESPCache[p] then
-                DestroyESP(ESPCache[p])
-                ESPCache[p] = nil
-            end
+            if ESPCache[p] then DestroyESP(ESPCache[p]); ESPCache[p] = nil end
+            RemoveHighlight(p)
         end)
     end
 
     -- ================================================
-    -- AIMBOT CORE
+    -- AIMBOT
     -- ================================================
 
     local AimState = {
@@ -1144,24 +1298,6 @@ HubLoader = function()
             Thickness=CONFIG.Aimbot.FOVThickness+1, Transparency=CONFIG.Aimbot.FOVTransparency, Color=Color3.fromRGB(0,0,0) })
         Tracer = NewDraw("Line", { Visible=false, Thickness=CONFIG.Aimbot.TracerThickness,
             Transparency=0.3, Color=CONFIG.Aimbot.TracerColor })
-    else
-        local function MakeFOVFrame(parent)
-            local f = Instance.new("Frame")
-            f.BackgroundTransparency = 1
-            f.Visible = false
-            f.ZIndex = 5
-            f.Parent = parent
-            Corner(f, 999)
-            return f
-        end
-        FOVCircle  = MakeFOVFrame(ScreenGui)
-        FOVOutline = MakeFOVFrame(ScreenGui)
-        Tracer     = Instance.new("Frame")
-        Tracer.BackgroundColor3 = CONFIG.Aimbot.TracerColor
-        Tracer.BorderSizePixel = 0
-        Tracer.Visible = false
-        Tracer.ZIndex = 3
-        Tracer.Parent = ScreenGui
     end
 
     local function GetMouseLoc() return UserInputService:GetMouseLocation() end
@@ -1237,39 +1373,20 @@ HubLoader = function()
     end
 
     local function UpdateFOVVisual(m, visible, locked)
-        if HasDrawing then
-            FOVCircle.Position = m
-            FOVCircle.Radius = CONFIG.Aimbot.FOV
-            FOVCircle.Thickness = CONFIG.Aimbot.FOVThickness
-            FOVCircle.Filled = CONFIG.Aimbot.FOVFilled
-            FOVCircle.Visible = visible
-            FOVCircle.Color = locked or CONFIG.Aimbot.FOVColor
-            FOVOutline.Position = m
-            FOVOutline.Radius = CONFIG.Aimbot.FOV
-            FOVOutline.Thickness = CONFIG.Aimbot.FOVThickness + 1
-            FOVOutline.Visible = visible
-            FOVOutline.Color = locked or Color3.fromRGB(0,0,0)
-        else
-            local d = CONFIG.Aimbot.FOV * 2
-            FOVCircle.Size = UDim2.fromOffset(d, d)
-            FOVCircle.Position = UDim2.fromOffset(m.X - CONFIG.Aimbot.FOV, m.Y - CONFIG.Aimbot.FOV)
-            FOVCircle.Visible = visible
-            FOVCircle.BackgroundColor3 = locked or CONFIG.Aimbot.FOVColor
-            FOVCircle.BackgroundTransparency = CONFIG.Aimbot.FOVFilled and CONFIG.Aimbot.FOVTransparency or 1
-            local st = FOVCircle:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", FOVCircle)
-            st.Color = locked or CONFIG.Aimbot.FOVColor
-            st.Thickness = CONFIG.Aimbot.FOVThickness
-
-            FOVOutline.Size = UDim2.fromOffset(d+2, d+2)
-            FOVOutline.Position = UDim2.fromOffset(m.X - CONFIG.Aimbot.FOV - 1, m.Y - CONFIG.Aimbot.FOV - 1)
-            FOVOutline.Visible = visible
-            local st2 = FOVOutline:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", FOVOutline)
-            st2.Color = Color3.fromRGB(0,0,0)
-            st2.Thickness = CONFIG.Aimbot.FOVThickness + 1
-        end
+        if not HasDrawing then return end
+        FOVCircle.Position = m
+        FOVCircle.Radius = CONFIG.Aimbot.FOV
+        FOVCircle.Thickness = CONFIG.Aimbot.FOVThickness
+        FOVCircle.Filled = CONFIG.Aimbot.FOVFilled
+        FOVCircle.Visible = visible
+        FOVCircle.Color = locked or CONFIG.Aimbot.FOVColor
+        FOVOutline.Position = m
+        FOVOutline.Radius = CONFIG.Aimbot.FOV
+        FOVOutline.Thickness = CONFIG.Aimbot.FOVThickness + 1
+        FOVOutline.Visible = visible
+        FOVOutline.Color = locked or Color3.fromRGB(0,0,0)
     end
 
-    -- silent aim -- high executor only
     local InHook = false
 
     if ExecutorLevel == "High" and hookmetamethod and newcclosure and getnamecallmethod then
@@ -1299,8 +1416,7 @@ HubLoader = function()
                 if not InHook and not fromSelf and self == Mouse and ShouldSilent() then
                     InHook = true
                     local ok, res = pcall(function()
-                        if key == "Hit" then
-                            return CFrame.new(AimState.SilentTarget)
+                        if key == "Hit" then return CFrame.new(AimState.SilentTarget)
                         elseif key == "UnitRay" then
                             local o = Camera.CFrame.Position
                             return Ray.new(o, (AimState.SilentTarget - o).Unit)
@@ -1335,17 +1451,6 @@ HubLoader = function()
 
                     if self == workspace and (method == "FindPartOnRay" or method == "findPartOnRay")
                         and #args >= 2 and typeof(args[2]) == "Ray" then
-                        InHook = true
-                        local r = args[2]
-                        args[2] = Ray.new(r.Origin, AimState.SilentTarget - r.Origin)
-                        local ok, res = pcall(oldNC, table.unpack(args))
-                        InHook = false
-                        if ok then return res end
-                    end
-
-                    if self == workspace and (method == "FindPartOnRayWithIgnoreList" or method == "findPartOnRayWithIgnoreList"
-                        or method == "FindPartOnRayWithWhitelist" or method == "findPartOnRayWithWhitelist")
-                        and #args >= 3 and typeof(args[2]) == "Ray" then
                         InHook = true
                         local r = args[2]
                         args[2] = Ray.new(r.Origin, AimState.SilentTarget - r.Origin)
@@ -1454,5 +1559,5 @@ HubLoader = function()
         end
     end)
 
-    SwitchTab("Combat")
+    SwitchTab("Visual")
 end
