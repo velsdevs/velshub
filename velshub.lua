@@ -1,38 +1,32 @@
 -- ================================================
--- VelsHub v3.0 | Supabase Auth + Dual Method Aimbot + Wall-Pen ESP
+-- VelsHub v3.0.1 | Supabase Auth + Dual Method Aimbot + Wall-Pen ESP
 -- ================================================
 -- Changelog:
---   v2.9: toggle GUI pake K, placeholder kosong
---   v3.0: Supabase REST auth, dual-method aimbot (high/low executor),
---         wall penetration ESP, tombol register
-
--- ================================================
--- CONFIG
--- ================================================
+--   v3.0: Supabase REST auth, dual-method aimbot, wall pen ESP
+--   v3.0.1: pake `request` (bukan HttpService:RequestAsync),
+--           emoji dihilangkan, fix executor Real support
 
 local CONFIG = {
-    -- isi ini sama Project URL & anon key Supabase lo
     SupabaseURL = "https://glkrwegvlmowprdbobkc.supabase.co",
     SupabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdsa3J3ZWd2bG1vd3ByZGJvYmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NDEwOTgsImV4cCI6MjEwNTIxNzA5OH0.229jGLrrhuFJwp8GUpMzhTIhWqAdgCggYHB2SNF4BNc",
 
-    -- fitur default
     ESP = {
         Enabled       = true,
         Box           = true,
         Name          = true,
         Skeleton      = true,
         HealthBar     = true,
-        WallPenetration = true,   -- ESP tembus tembok
+        WallPenetration = true,
         BoxColor      = Color3.fromRGB(220, 100, 180),
         NameColor     = Color3.fromRGB(255, 180, 230),
         SkeletonColor = Color3.fromRGB(180, 80, 220),
-        WallPenColor  = Color3.fromRGB(255, 100, 100), -- warna beda buat target di balik tembok
+        WallPenColor  = Color3.fromRGB(255, 100, 100),
         TeamCheck     = false,
     },
 
     Aimbot = {
         Enabled        = true,
-        Method         = "Camera",   -- "Camera" (low exec) / "Silent" (high exec)
+        Method         = "Camera",
         TriggerKey     = Enum.UserInputType.MouseButton2,
         Toggle         = false,
         LockPart       = "Head",
@@ -56,7 +50,6 @@ local CONFIG = {
         TracerColor    = Color3.fromRGB(220, 100, 180),
         TracerThickness = 1.5,
 
-        -- silent aim tuning (khusus high executor)
         SilentChance   = 100,
         Prediction     = 0.12,
         GravityComp    = true,
@@ -72,7 +65,6 @@ local CONFIG = {
     },
 }
 
--- palette
 local Pal = {
     Window      = Color3.fromRGB(14, 10, 22),
     Sidebar     = Color3.fromRGB(18, 12, 28),
@@ -95,7 +87,6 @@ local Pal = {
     Shadow      = Color3.fromRGB(6, 3, 12),
 }
 
--- services
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local TweenService     = game:GetService("TweenService")
@@ -103,7 +94,6 @@ local HttpService      = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local Lighting         = game:GetService("Lighting")
 
--- CoreGui fallback
 local CoreGui
 pcall(function() CoreGui = game:GetService("CoreGui") end)
 if not CoreGui then
@@ -114,56 +104,74 @@ local LocalPlayer = Players.LocalPlayer
 local Camera      = workspace.CurrentCamera
 local Mouse       = LocalPlayer:GetMouse()
 
--- exec detection
 local ExecutorLevel = "Low"
 local ExecutorName  = "Unknown"
 do
     if syn then ExecutorName = "Synapse"; ExecutorLevel = "High"
     elseif KRNL_LOADED then ExecutorName = "KRNL"; ExecutorLevel = "High"
     elseif is_sirhurt_closure then ExecutorName = "SirHurt"; ExecutorLevel = "High"
-    elseif secure_load and secure_load_script then ExecutorName = "Secured"; ExecutorLevel = "High"
     elseif getexecutorname then
         local ok, n = pcall(getexecutorname)
         if ok then ExecutorName = n or "Unknown" end
-        if hookmetamethod and newcclosure and getnamecallmethod and checkcaller then
-            ExecutorLevel = "High"
-        end
     end
-    if not hookmetamethod or not newcclosure then
-        ExecutorLevel = "Low"
+    if hookmetamethod and newcclosure and getnamecallmethod and checkcaller then
+        ExecutorLevel = "High"
     end
 end
 
 local HasDrawing = (Drawing and Drawing.new) ~= nil
 
 -- ================================================
--- AUTH — Supabase REST API
+-- AUTH -- Supabase REST via `request`
 -- ================================================
 
 local CurrentUser = nil
 
 local function SupabaseReq(method, path, body)
-    local payload = {
-        Url = CONFIG.SupabaseURL .. "/rest/v1/" .. path,
-        Method = method,
-        Headers = {
-            ["apikey"]        = CONFIG.SupabaseKey,
-            ["Authorization"] = "Bearer " .. CONFIG.SupabaseKey,
-            ["Content-Type"]  = "application/json",
-            ["Prefer"]        = "return=representation",
-        },
+    local url = CONFIG.SupabaseURL .. "/rest/v1/" .. path
+    local headers = {
+        ["apikey"]        = CONFIG.SupabaseKey,
+        ["Authorization"] = "Bearer " .. CONFIG.SupabaseKey,
+        ["Content-Type"]  = "application/json",
+        ["Prefer"]        = "return=representation",
     }
-    if body then payload.Body = HttpService:JSONEncode(body) end
 
-    local ok, res = pcall(function()
-        return HttpService:RequestAsync(payload)
-    end)
-    if not ok then return false, "Network error" end
+    local payload = {
+        Url = url,
+        Method = method,
+        Headers = headers,
+    }
+    if body then
+        payload.Body = HttpService:JSONEncode(body)
+    end
+
+    -- pilih executor request fn
+    local fn = nil
+    if request then fn = request
+    elseif http and http.request then fn = http.request
+    elseif syn and syn.request then fn = syn.request
+    end
+
+    if not fn then
+        return false, "Executor tidak support HTTP request"
+    end
+
+    local ok, res = pcall(fn, payload)
+    if not ok then
+        return false, "Request error: " .. tostring(res)
+    end
+    if type(res) ~= "table" then
+        return false, "Invalid response"
+    end
     if not res.Success then
         return false, "Server " .. tostring(res.StatusCode) .. ": " .. tostring(res.Body)
     end
+
     local ok2, data = pcall(HttpService.JSONDecode, HttpService, res.Body)
-    if not ok2 then return false, "Parse error" end
+    if not ok2 then
+        return false, "Parse error: " .. tostring(res.Body)
+    end
+
     return true, data
 end
 
@@ -187,7 +195,6 @@ local function SupabaseRegister(u, p)
     if #u < 3 then return false, "username minimal 3 char" end
     if #p < 3 then return false, "password minimal 3 char" end
 
-    -- cek duplikat
     local ok, data = SupabaseReq("GET", string.format(
         "accounts?username=eq.%s&select=id", HttpService:UrlEncode(u)
     ))
@@ -206,7 +213,7 @@ local function SupabaseRegister(u, p)
 end
 
 -- ================================================
--- GUI Helpers (dipakai login & hub)
+-- GUI Helpers
 -- ================================================
 
 local function Corner(p, r)
@@ -413,18 +420,18 @@ task.spawn(function()
     end
 end)
 
-local TitleLabel = BoldLabel(LoginCard, "VelsHub v3.0", UDim2.new(0,0,0,80), UDim2.new(1,0,0,26), Pal.Text, 20, Enum.TextXAlignment.Center)
+local TitleLabel = BoldLabel(LoginCard, "VelsHub v3.0.1", UDim2.new(0,0,0,80), UDim2.new(1,0,0,26), Pal.Text, 20, Enum.TextXAlignment.Center)
 TitleLabel.ZIndex = 6
 local SubLabel = Label(LoginCard, "login ke supabase", UDim2.new(0,0,0,104), UDim2.new(1,0,0,16), Pal.TextDim, 11, Enum.TextXAlignment.Center)
 SubLabel.ZIndex = 6
 
 Label(LoginCard, "Username", UDim2.new(0,20,0,132), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
-local LoginUserBox = TextBox(LoginCard, "username...", UDim2.new(1,-40,0,34))
+local LoginUserBox = TextBox(LoginCard, "", UDim2.new(1,-40,0,34))
 LoginUserBox.Position = UDim2.new(0,20,0,148)
 LoginUserBox.ZIndex = 6
 
 Label(LoginCard, "Password", UDim2.new(0,20,0,190), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
-local LoginPassBox = TextBox(LoginCard, "password...", UDim2.new(1,-40,0,34))
+local LoginPassBox = TextBox(LoginCard, "", UDim2.new(1,-40,0,34))
 LoginPassBox.Position = UDim2.new(0,20,0,206)
 LoginPassBox.ZIndex = 6
 
@@ -433,13 +440,13 @@ LoginStatus.ZIndex = 6
 
 local HubLoader
 
-local LoginBtn = Button(LoginCard, "🔓  Login", UDim2.new(1,-40,0,36), function()
+local LoginBtn = Button(LoginCard, "Login", UDim2.new(1,-40,0,36), function()
     LoginStatus.TextColor3 = Pal.TextDim
     LoginStatus.Text = "..."
     task.spawn(function()
         local ok, msg = SupabaseLogin(LoginUserBox.Text, LoginPassBox.Text)
         LoginStatus.TextColor3 = ok and Pal.Success or Pal.Error
-        LoginStatus.Text = (ok and "✓ " or "✗ ") .. msg
+        LoginStatus.Text = (ok and "[OK] " or "[X] ") .. msg
         if ok then
             task.wait(0.4)
             TweenService:Create(LoginCard, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
@@ -463,7 +470,7 @@ local RegisterBtn = Button(LoginCard, "Register", UDim2.new(1,-40,0,26), functio
     task.spawn(function()
         local ok, msg = SupabaseRegister(LoginUserBox.Text, LoginPassBox.Text)
         LoginStatus.TextColor3 = ok and Pal.Success or Pal.Error
-        LoginStatus.Text = (ok and "✓ " or "✗ ") .. msg
+        LoginStatus.Text = (ok and "[OK] " or "[X] ") .. msg
     end)
 end)
 RegisterBtn.Position = UDim2.new(0,20,0,310)
@@ -511,8 +518,8 @@ HubLoader = function()
         g.Parent = al
     end
 
-    BoldLabel(TitleBar, "⬡  VelsHub", UDim2.new(0,16,0,0), UDim2.new(0,200,1,0), Pal.Text, 14)
-    Label(TitleBar, "v3.0 | " .. ExecutorName .. " (" .. ExecutorLevel .. ")", UDim2.new(0,110,0,0), UDim2.new(0,200,1,0), Pal.TextMute, 10)
+    BoldLabel(TitleBar, "VelsHub", UDim2.new(0,16,0,0), UDim2.new(0,200,1,0), Pal.Text, 14)
+    Label(TitleBar, "v3.0.1 | " .. ExecutorName .. " (" .. ExecutorLevel .. ")", UDim2.new(0,90,0,0), UDim2.new(0,220,1,0), Pal.TextMute, 10)
     Label(TitleBar, "[K]", UDim2.new(1,-100,0,0), UDim2.new(0,30,1,0), Pal.TextMute, 10, Enum.TextXAlignment.Center)
 
     local MinBtn = Instance.new("TextButton")
@@ -522,7 +529,7 @@ HubLoader = function()
     MinBtn.TextColor3 = Pal.TextDim
     MinBtn.Font = Enum.Font.GothamBold
     MinBtn.TextSize = 14
-    MinBtn.Text = "−"
+    MinBtn.Text = "-"
     MinBtn.BorderSizePixel = 0
     MinBtn.AutoButtonColor = false
     MinBtn.Parent = TitleBar
@@ -535,7 +542,7 @@ HubLoader = function()
     CloseBtn.TextColor3 = Pal.TextDim
     CloseBtn.Font = Enum.Font.GothamBold
     CloseBtn.TextSize = 14
-    CloseBtn.Text = "✕"
+    CloseBtn.Text = "x"
     CloseBtn.BorderSizePixel = 0
     CloseBtn.AutoButtonColor = false
     CloseBtn.Parent = TitleBar
@@ -561,7 +568,6 @@ HubLoader = function()
         end)
     end
 
-    -- sidebar
     local SidebarW = 150
     local Sidebar = Frame(Main, UDim2.new(0,SidebarW, 1,-60), UDim2.new(0,0,0,40), Pal.Sidebar, 0.2)
     Corner(Sidebar, 10)
@@ -632,7 +638,6 @@ HubLoader = function()
         btn.MouseButton1Click:Connect(function() SwitchTab(name) end)
     end
 
-    -- widgets
     local function Section(parent, title)
         local s = Frame(parent, UDim2.new(1,0,0,0), nil, Pal.Card)
         Corner(s, 10)
@@ -648,7 +653,7 @@ HubLoader = function()
         head.LayoutOrder = 0
         BoldLabel(head, title:upper(), UDim2.new(0,0,0,0), UDim2.new(1,-20,1,0), Pal.Accent, 11)
 
-        local arrow = Label(head, "▾", UDim2.new(1,-14,0,0), UDim2.new(0,14,1,0), Pal.TextMute, 12, Enum.TextXAlignment.Center)
+        local arrow = Label(head, "v", UDim2.new(1,-14,0,0), UDim2.new(0,14,1,0), Pal.TextMute, 12, Enum.TextXAlignment.Center)
         arrow.Font = Enum.Font.GothamBold
 
         local holder = Frame(s, UDim2.new(1,0,0,0), nil, Color3.fromRGB(0,0,0), 1)
@@ -668,7 +673,7 @@ HubLoader = function()
         hb.MouseButton1Click:Connect(function()
             open = not open
             holder.Visible = open
-            arrow.Text = open and "▾" or "▸"
+            arrow.Text = open and "v" or ">"
         end)
 
         return holder
@@ -754,7 +759,6 @@ HubLoader = function()
         return w
     end
 
-    -- toggle gui K
     local GuiVisible = true
     local function SetGuiVisible(state)
         GuiVisible = state
@@ -792,7 +796,7 @@ HubLoader = function()
     end)
 
     -- ================================================
-    -- VISUAL — ESP
+    -- VISUAL -- ESP
     -- ================================================
 
     local VP = Pages["Visual"]
@@ -806,7 +810,7 @@ HubLoader = function()
     Toggle(espSec, "Team Check",      CONFIG.ESP.TeamCheck,     function(v) CONFIG.ESP.TeamCheck = v end)
 
     -- ================================================
-    -- COMBAT — AIMBOT
+    -- COMBAT -- AIMBOT
     -- ================================================
 
     local CP = Pages["Combat"]
@@ -940,7 +944,6 @@ HubLoader = function()
         return found, mnx, mny, mxx, mxy
     end
 
-    -- chams (tembus tembok)
     local function ApplyChams(char, color, thick)
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") and not p:FindFirstChild("__VelsChams") then
@@ -1026,12 +1029,10 @@ HubLoader = function()
                 local bw = math.max(mxx - mnx + 8, 1)
                 local bh = math.max(mxy - mny + 8, 1)
 
-                -- wall pen detection
                 local targetPos = char:FindFirstChild("Head") and char.Head.Position or Vector3.zero
                 local visible = IsVisible(char, targetPos)
                 local useWallPen = CONFIG.ESP.WallPenetration
 
-                -- kalau wall pen OFF dan target ga keliatan, skip
                 if not useWallPen and not visible then
                     obj.Box.Visible = false; obj.BoxOutline.Visible = false
                     obj.Name.Visible = false; obj.Health.Visible = false; obj.HealthBG.Visible = false
@@ -1040,7 +1041,6 @@ HubLoader = function()
                     continue
                 end
 
-                -- warna: kalo ga keliatan (di balik tembok) pake WallPenColor
                 local boxColor = CONFIG.ESP.BoxColor
                 local nameColor = CONFIG.ESP.NameColor
                 local skelColor = CONFIG.ESP.SkeletonColor
@@ -1101,7 +1101,6 @@ HubLoader = function()
                     for _, b in ipairs(obj.Bones) do b.Visible = false end
                 end
 
-                -- chams (tembus tembok pake SelectionBox)
                 if CONFIG.ESP.WallPenetration or visible then
                     local chamsColor = CONFIG.Misc.RainbowESP and rb or boxColor
                     local existing = false
@@ -1125,7 +1124,7 @@ HubLoader = function()
     end
 
     -- ================================================
-    -- AIMBOT CORE — dual method
+    -- AIMBOT CORE
     -- ================================================
 
     local AimState = {
@@ -1270,14 +1269,10 @@ HubLoader = function()
         end
     end
 
-    -- ================================================
-    -- SILENT AIM (high executor only)
-    -- ================================================
-
+    -- silent aim -- high executor only
     local InHook = false
 
     if ExecutorLevel == "High" and hookmetamethod and newcclosure and getnamecallmethod then
-        -- cache target tiap frame
         RunService.RenderStepped:Connect(function()
             if CONFIG.Aimbot.Method == "Silent"
                 and CONFIG.Aimbot.Enabled
@@ -1297,7 +1292,6 @@ HubLoader = function()
                 and (math.random() * 100) <= CONFIG.Aimbot.SilentChance
         end
 
-        -- hook __index buat Mouse.Hit / UnitRay
         pcall(function()
             local oldIndex
             oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
@@ -1320,7 +1314,6 @@ HubLoader = function()
             end))
         end)
 
-        -- hook __namecall buat Raycast / FindPartOnRay
         pcall(function()
             local oldNC
             oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
@@ -1366,10 +1359,6 @@ HubLoader = function()
         end)
     end
 
-    -- ================================================
-    -- CAMERA LOCK (semua executor)
-    -- ================================================
-
     local function OnAimbotUpdate()
         if not CONFIG.Aimbot.Enabled then
             UpdateFOVVisual(GetMouseLoc(), false, nil)
@@ -1384,7 +1373,6 @@ HubLoader = function()
             return
         end
 
-        -- tracer
         if HasDrawing and CONFIG.Aimbot.TracerEnabled and not AimState.Locked then
             local t = GetClosestTarget()
             if t then
@@ -1399,12 +1387,10 @@ HubLoader = function()
             if HasDrawing then Tracer.Visible = false end
         end
 
-        -- kalo pake silent method, cukup cache target aja, camera ga usah diubah
         if CONFIG.Aimbot.Method == "Silent" and ExecutorLevel == "High" then
             return
         end
 
-        -- camera lock
         if not AimState.Locked then
             local t = GetClosestTarget()
             if t then AimState.Locked = t.player end
@@ -1445,7 +1431,6 @@ HubLoader = function()
 
     RunService.RenderStepped:Connect(OnAimbotUpdate)
 
-    -- input
     UserInputService.InputBegan:Connect(function(i, gp)
         if gp then return end
         if UserInputService:GetFocusedTextBox() then return end
@@ -1469,10 +1454,5 @@ HubLoader = function()
         end
     end)
 
-    -- default tab
     SwitchTab("Combat")
 end
-
--- ================================================
--- INIT
--- ================================================
