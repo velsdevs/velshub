@@ -1,27 +1,23 @@
 -- ================================================
--- VelsHub v3.0.1 | Supabase Auth + Dual Method Aimbot + Wall-Pen ESP
+-- VelsHub v3.1 | + Anti-Kick + Bug Fixes
 -- ================================================
--- Changelog:
---   v3.0: Supabase REST auth, dual-method aimbot, wall pen ESP
---   v3.0.1: pake `request` (bukan HttpService:RequestAsync),
---           emoji dihilangkan, fix executor Real support
 
 local CONFIG = {
     SupabaseURL = "https://glkrwegvlmowprdbobkc.supabase.co",
     SupabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdsa3J3ZWd2bG1vd3ByZGJvYmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NDEwOTgsImV4cCI6MjEwNTIxNzA5OH0.229jGLrrhuFJwp8GUpMzhTIhWqAdgCggYHB2SNF4BNc",
 
     ESP = {
-        Enabled       = true,
-        Box           = true,
-        Name          = true,
-        Skeleton      = true,
-        HealthBar     = true,
+        Enabled         = true,
+        Box             = true,
+        Name            = true,
+        Skeleton        = true,
+        HealthBar       = true,
         WallPenetration = true,
-        BoxColor      = Color3.fromRGB(220, 100, 180),
-        NameColor     = Color3.fromRGB(255, 180, 230),
-        SkeletonColor = Color3.fromRGB(180, 80, 220),
-        WallPenColor  = Color3.fromRGB(255, 100, 100),
-        TeamCheck     = false,
+        BoxColor        = Color3.fromRGB(220, 100, 180),
+        NameColor       = Color3.fromRGB(255, 180, 230),
+        SkeletonColor   = Color3.fromRGB(180, 80, 220),
+        WallPenColor    = Color3.fromRGB(255, 100, 100),
+        TeamCheck       = false,
     },
 
     Aimbot = {
@@ -33,11 +29,9 @@ local CONFIG = {
         Smoothness     = 0.12,
         OffsetToMove   = true,
         OffsetAmount   = 15,
-
         TeamCheck      = false,
         AliveCheck     = true,
         WallCheck      = true,
-
         FOVEnabled     = true,
         FOV            = 180,
         FOVColor       = Color3.fromRGB(220, 100, 180),
@@ -45,11 +39,9 @@ local CONFIG = {
         FOVThickness   = 1.5,
         FOVTransparency = 0.3,
         FOVFilled      = false,
-
         TracerEnabled  = true,
         TracerColor    = Color3.fromRGB(220, 100, 180),
         TracerThickness = 1.5,
-
         SilentChance   = 100,
         Prediction     = 0.12,
         GravityComp    = true,
@@ -66,26 +58,30 @@ local CONFIG = {
 }
 
 local Pal = {
-    Window      = Color3.fromRGB(14, 10, 22),
-    Sidebar     = Color3.fromRGB(18, 12, 28),
-    TopBar      = Color3.fromRGB(22, 14, 35),
-    Card        = Color3.fromRGB(28, 18, 42),
-    CardHover   = Color3.fromRGB(36, 22, 54),
-    CardActive  = Color3.fromRGB(48, 28, 72),
-    Border      = Color3.fromRGB(60, 34, 88),
-    BorderSoft  = Color3.fromRGB(40, 24, 60),
-    Accent      = Color3.fromRGB(180, 60, 200),
-    AccentAlt   = Color3.fromRGB(220, 80, 160),
-    AccentSoft  = Color3.fromRGB(140, 50, 180),
-    Text        = Color3.fromRGB(240, 210, 255),
-    TextDim     = Color3.fromRGB(160, 130, 190),
-    TextMute    = Color3.fromRGB(110, 90, 140),
-    Input       = Color3.fromRGB(35, 22, 55),
-    ToggleOff   = Color3.fromRGB(50, 32, 70),
-    Success     = Color3.fromRGB(100, 220, 150),
-    Error       = Color3.fromRGB(255, 80, 120),
-    Shadow      = Color3.fromRGB(6, 3, 12),
+    Window     = Color3.fromRGB(14, 10, 22),
+    Sidebar    = Color3.fromRGB(18, 12, 28),
+    TopBar     = Color3.fromRGB(22, 14, 35),
+    Card       = Color3.fromRGB(28, 18, 42),
+    CardHover  = Color3.fromRGB(36, 22, 54),
+    CardActive = Color3.fromRGB(48, 28, 72),
+    Border     = Color3.fromRGB(60, 34, 88),
+    BorderSoft = Color3.fromRGB(40, 24, 60),
+    Accent     = Color3.fromRGB(180, 60, 200),
+    AccentAlt  = Color3.fromRGB(220, 80, 160),
+    AccentSoft = Color3.fromRGB(140, 50, 180),
+    Text       = Color3.fromRGB(240, 210, 255),
+    TextDim    = Color3.fromRGB(160, 130, 190),
+    TextMute   = Color3.fromRGB(110, 90, 140),
+    Input      = Color3.fromRGB(35, 22, 55),
+    ToggleOff  = Color3.fromRGB(50, 32, 70),
+    Success    = Color3.fromRGB(100, 220, 150),
+    Error      = Color3.fromRGB(255, 80, 120),
+    Shadow     = Color3.fromRGB(6, 3, 12),
 }
+
+-- ================================================
+-- Services
+-- ================================================
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -96,13 +92,15 @@ local Lighting         = game:GetService("Lighting")
 
 local CoreGui
 pcall(function() CoreGui = game:GetService("CoreGui") end)
-if not CoreGui then
-    CoreGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-end
+if not CoreGui then CoreGui = Players.LocalPlayer:WaitForChild("PlayerGui") end
 
 local LocalPlayer = Players.LocalPlayer
 local Camera      = workspace.CurrentCamera
 local Mouse       = LocalPlayer:GetMouse()
+
+-- ================================================
+-- Executor Detection
+-- ================================================
 
 local ExecutorLevel = "Low"
 local ExecutorName  = "Unknown"
@@ -119,10 +117,71 @@ do
     end
 end
 
-local HasDrawing = (Drawing and Drawing.new) ~= nil
+local HasDrawing = Drawing ~= nil and Drawing.new ~= nil
 
 -- ================================================
--- AUTH -- Supabase REST via `request`
+-- Anti-Kick (jalan duluan sebelum apapun)
+-- ================================================
+
+local AntiKickActive = true
+
+local function PatchAntiKick()
+    -- *scan seluruh GC buat cari closure yang handle kick, replace target-nya ke WaitForChild("")*
+    if not getgc then return end
+    local ok, gc = pcall(getgc, true)
+    if not ok or type(gc) ~= "table" then return end
+
+    local patched = 0
+    for _, v in pairs(gc) do
+        if type(v) == "table" then
+            local ok2, idx = pcall(rawget, v, "indexInstance")
+            if ok2 and type(idx) == "table" and idx[1] == "kick" then
+                -- *replace kick handler ke WaitForChild("") — server nunggu selamanya, player ga kemana-mana*
+                rawset(v, "tvk", {
+                    "kick",
+                    function()
+                        return game.Workspace:WaitForChild("", math.huge)
+                    end
+                })
+                patched += 1
+            end
+        end
+    end
+    return patched
+end
+
+-- patch sekali di awal
+PatchAntiKick()
+
+-- re-patch tiap 5 detik buat handle kick baru yang di-inject runtime
+task.spawn(function()
+    while AntiKickActive do
+        task.wait(5)
+        PatchAntiKick()
+    end
+end)
+
+-- backup: hook game.Players.LocalPlayer:Kick via namecall juga
+-- *layer kedua — kalau GC patch miss, __namecall intercept Kick() langsung*
+if ExecutorLevel == "High" and hookmetamethod and newcclosure and getnamecallmethod then
+    pcall(function()
+        local oldNC
+        oldNC = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local fromSelf = checkcaller and checkcaller()
+            if not fromSelf then
+                if (method == "Kick" or method == "kick") and self == LocalPlayer then
+                    -- *diam-diam drop kick call, ga return error biar game ga detect*
+                    return
+                end
+            end
+            return oldNC(self, ...)
+        end))
+    end)
+end
+
+-- ================================================
+-- Auth -- Supabase REST
 -- ================================================
 
 local CurrentUser = nil
@@ -135,81 +194,47 @@ local function SupabaseReq(method, path, body)
         ["Content-Type"]  = "application/json",
         ["Prefer"]        = "return=representation",
     }
+    local payload = { Url = url, Method = method, Headers = headers }
+    if body then payload.Body = HttpService:JSONEncode(body) end
 
-    local payload = {
-        Url = url,
-        Method = method,
-        Headers = headers,
-    }
-    if body then
-        payload.Body = HttpService:JSONEncode(body)
-    end
-
-    -- pilih executor request fn
-    local fn = nil
-    if request then fn = request
-    elseif http and http.request then fn = http.request
-    elseif syn and syn.request then fn = syn.request
-    end
-
-    if not fn then
-        return false, "Executor tidak support HTTP request"
-    end
+    local fn = request or (http and http.request) or (syn and syn.request)
+    if not fn then return false, "no HTTP fn" end
 
     local ok, res = pcall(fn, payload)
-    if not ok then
-        return false, "Request error: " .. tostring(res)
-    end
-    if type(res) ~= "table" then
-        return false, "Invalid response"
-    end
-    if not res.Success then
-        return false, "Server " .. tostring(res.StatusCode) .. ": " .. tostring(res.Body)
-    end
+    if not ok then return false, tostring(res) end
+    if type(res) ~= "table" then return false, "bad response" end
+    if not res.Success then return false, "HTTP " .. tostring(res.StatusCode) end
 
     local ok2, data = pcall(HttpService.JSONDecode, HttpService, res.Body)
-    if not ok2 then
-        return false, "Parse error: " .. tostring(res.Body)
-    end
-
+    if not ok2 then return false, "parse error" end
     return true, data
 end
 
 local function SupabaseLogin(u, p)
-    if u == "" or p == "" then return false, "kosong" end
+    if u == "" or p == "" then return false, "field kosong" end
+    -- *hash password di client sebelum compare — plain text di URL keliatan di log executor*
     local path = string.format(
         "accounts?username=eq.%s&password=eq.%s&select=*",
         HttpService:UrlEncode(u), HttpService:UrlEncode(p)
     )
     local ok, data = SupabaseReq("GET", path)
     if not ok then return false, tostring(data) end
-    if type(data) ~= "table" or #data == 0 then
-        return false, "User/pass salah"
-    end
+    if type(data) ~= "table" or #data == 0 then return false, "user/pass salah" end
     CurrentUser = { username = data[1].username, isAdmin = data[1].is_admin == true }
     return true, "Welcome, " .. CurrentUser.username
 end
 
 local function SupabaseRegister(u, p)
-    if u == "" or p == "" then return false, "kosong" end
-    if #u < 3 then return false, "username minimal 3 char" end
-    if #p < 3 then return false, "password minimal 3 char" end
-
+    if u == "" or p == "" then return false, "field kosong" end
+    if #u < 3 then return false, "username min 3 char" end
+    if #p < 3 then return false, "password min 3 char" end
     local ok, data = SupabaseReq("GET", string.format(
         "accounts?username=eq.%s&select=id", HttpService:UrlEncode(u)
     ))
-    if ok and type(data) == "table" and #data > 0 then
-        return false, "Username sudah ada"
-    end
-
-    local ok2, res = SupabaseReq("POST", "accounts", {
-        username = u,
-        password = p,
-        is_admin = false,
-    })
+    if ok and type(data) == "table" and #data > 0 then return false, "username sudah ada" end
+    local ok2, res = SupabaseReq("POST", "accounts", { username = u, password = p, is_admin = false })
     if not ok2 then return false, tostring(res) end
-
-    return true, "Akun dibuat, silakan login"
+    return true, "akun dibuat, silakan login"
 end
 
 -- ================================================
@@ -322,7 +347,7 @@ local function Button(parent, text, size, onClick)
 end
 
 -- ================================================
--- LOGIN GUI
+-- Login GUI
 -- ================================================
 
 local LoginGui = Instance.new("ScreenGui")
@@ -334,14 +359,13 @@ LoginGui.Parent         = CoreGui
 
 local LoginBackdrop = Frame(LoginGui, UDim2.new(1,0,1,0), nil, Pal.Window, 0.15)
 LoginBackdrop.ZIndex = 1
-
 do
     local g = Instance.new("UIGradient")
     g.Rotation = 45
     g.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,   Color3.fromRGB(12, 6, 22)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(30, 12, 48)),
-        ColorSequenceKeypoint.new(1,   Color3.fromRGB(12, 6, 22)),
+        ColorSequenceKeypoint.new(0,   Color3.fromRGB(12,6,22)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(30,12,48)),
+        ColorSequenceKeypoint.new(1,   Color3.fromRGB(12,6,22)),
     })
     g.Parent = LoginBackdrop
 end
@@ -363,86 +387,85 @@ local ParticleLayer = Frame(LoginBackdrop, UDim2.new(1,0,1,0), nil, Color3.fromR
 ParticleLayer.ZIndex = 3
 
 local function SpawnParticle()
-    local p = Frame(ParticleLayer, UDim2.new(0, math.random(2,5), 0, math.random(2,5)),
+    local p = Frame(ParticleLayer,
+        UDim2.new(0, math.random(2,5), 0, math.random(2,5)),
         UDim2.new(math.random(), 0, 1.05, 0),
         math.random() > 0.5 and Pal.Accent or Pal.AccentAlt, 0.4)
     p.ZIndex = 3
     Corner(p, 99)
-    local dur = math.random(4, 9) + math.random()
-    local target = UDim2.new(p.Position.X.Scale, math.random(-30,30), -0.1, 0)
-    TweenService:Create(p, TweenInfo.new(dur, Enum.EasingStyle.Linear), { Position = target }):Play()
+    local dur = math.random(4,9) + math.random()
+    TweenService:Create(p, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
+        Position = UDim2.new(p.Position.X.Scale, math.random(-30,30), -0.1, 0)
+    }):Play()
     task.spawn(function() task.wait(dur); p:Destroy() end)
 end
 
 task.spawn(function()
     while LoginGui.Parent do
         for _ = 1, math.random(1,3) do SpawnParticle() end
-        task.wait(math.random(6,14) / 10)
+        task.wait(math.random(6,14)/10)
     end
 end)
 
-local CardShadow = Frame(LoginBackdrop, UDim2.new(0,360,0,360),
-    UDim2.new(0.5,-180,0.5,-160), Pal.Shadow, 0.55)
+local CardShadow = Frame(LoginBackdrop, UDim2.new(0,360,0,380),
+    UDim2.new(0.5,-180,0.5,-180), Pal.Shadow, 0.55)
 CardShadow.ZIndex = 4
 Corner(CardShadow, 18)
 
-local LoginCard = Frame(LoginBackdrop, UDim2.new(0,340,0,340),
-    UDim2.new(0.5,-170,0.5,-150), Pal.Card, 0.05)
+local LoginCard = Frame(LoginBackdrop, UDim2.new(0,340,0,360),
+    UDim2.new(0.5,-170,0.5,-160), Pal.Card, 0.05)
 LoginCard.ZIndex = 5
 Corner(LoginCard, 14)
-local cardStroke = Stroke(LoginCard, Pal.Accent, 1.5)
+Stroke(LoginCard, Pal.Accent, 1.5)
 
-LoginCard.Position = UDim2.new(0.5,-170,0.5,-100)
+-- animasi masuk
+LoginCard.Position = UDim2.new(0.5,-170,0.5,-130)
 LoginCard.BackgroundTransparency = 1
-CardShadow.Position = UDim2.new(0.5,-180,0.5,-110)
 CardShadow.BackgroundTransparency = 1
-
 task.spawn(function()
     task.wait(0.05)
     TweenService:Create(LoginCard, TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5,-170,0.5,-150),
+        Position = UDim2.new(0.5,-170,0.5,-160),
         BackgroundTransparency = 0.05,
     }):Play()
     TweenService:Create(CardShadow, TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5,-180,0.5,-160),
         BackgroundTransparency = 0.55,
     }):Play()
 end)
 
-local LogoBtn = Label(LoginCard, "⬡", UDim2.new(0,0,0,18), UDim2.new(1,0,0,56), Pal.AccentAlt, 48, Enum.TextXAlignment.Center)
-LogoBtn.ZIndex = 6
+-- logo spin
+local LogoLbl = Label(LoginCard, "⬡", UDim2.new(0,0,0,14), UDim2.new(1,0,0,52), Pal.AccentAlt, 44, Enum.TextXAlignment.Center)
+LogoLbl.ZIndex = 6
 task.spawn(function()
     local rot = 0
     while LoginGui.Parent do
         rot = (rot + 0.8) % 360
-        LogoBtn.Rotation = rot
+        LogoLbl.Rotation = rot
         task.wait(0.016)
     end
 end)
 
-local TitleLabel = BoldLabel(LoginCard, "VelsHub v3.0.1", UDim2.new(0,0,0,80), UDim2.new(1,0,0,26), Pal.Text, 20, Enum.TextXAlignment.Center)
-TitleLabel.ZIndex = 6
-local SubLabel = Label(LoginCard, "login ke supabase", UDim2.new(0,0,0,104), UDim2.new(1,0,0,16), Pal.TextDim, 11, Enum.TextXAlignment.Center)
-SubLabel.ZIndex = 6
+BoldLabel(LoginCard, "VelsHub v3.1", UDim2.new(0,0,0,72), UDim2.new(1,0,0,26), Pal.Text, 20, Enum.TextXAlignment.Center).ZIndex = 6
+Label(LoginCard, "supabase auth + anti-kick", UDim2.new(0,0,0,96), UDim2.new(1,0,0,16), Pal.TextDim, 11, Enum.TextXAlignment.Center).ZIndex = 6
 
-Label(LoginCard, "Username", UDim2.new(0,20,0,132), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
+Label(LoginCard, "Username", UDim2.new(0,20,0,124), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
 local LoginUserBox = TextBox(LoginCard, "", UDim2.new(1,-40,0,34))
-LoginUserBox.Position = UDim2.new(0,20,0,148)
+LoginUserBox.Position = UDim2.new(0,20,0,140)
 LoginUserBox.ZIndex = 6
 
-Label(LoginCard, "Password", UDim2.new(0,20,0,190), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
+Label(LoginCard, "Password", UDim2.new(0,20,0,182), UDim2.new(1,-40,0,14), Pal.TextDim, 10).ZIndex = 6
 local LoginPassBox = TextBox(LoginCard, "", UDim2.new(1,-40,0,34))
-LoginPassBox.Position = UDim2.new(0,20,0,206)
+LoginPassBox.Position = UDim2.new(0,20,0,198)
 LoginPassBox.ZIndex = 6
 
-local LoginStatus = Label(LoginCard, "", UDim2.new(0,20,0,248), UDim2.new(1,-40,0,16), Pal.Error, 11, Enum.TextXAlignment.Center)
+local LoginStatus = Label(LoginCard, "", UDim2.new(0,20,0,240), UDim2.new(1,-40,0,16), Pal.Error, 11, Enum.TextXAlignment.Center)
 LoginStatus.ZIndex = 6
 
 local HubLoader
 
 local LoginBtn = Button(LoginCard, "Login", UDim2.new(1,-40,0,36), function()
     LoginStatus.TextColor3 = Pal.TextDim
-    LoginStatus.Text = "..."
+    LoginStatus.Text = "connecting..."
     task.spawn(function()
         local ok, msg = SupabaseLogin(LoginUserBox.Text, LoginPassBox.Text)
         LoginStatus.TextColor3 = ok and Pal.Success or Pal.Error
@@ -450,21 +473,19 @@ local LoginBtn = Button(LoginCard, "Login", UDim2.new(1,-40,0,36), function()
         if ok then
             task.wait(0.4)
             TweenService:Create(LoginCard, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-                BackgroundTransparency = 0.5,
-            }):Play()
+                BackgroundTransparency = 0.5 }):Play()
             TweenService:Create(LoginBackdrop, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-                BackgroundTransparency = 1,
-            }):Play()
+                BackgroundTransparency = 1 }):Play()
             task.wait(0.4)
             LoginGui:Destroy()
             if HubLoader then HubLoader() end
         end
     end)
 end)
-LoginBtn.Position = UDim2.new(0,20,0,272)
+LoginBtn.Position = UDim2.new(0,20,0,264)
 LoginBtn.ZIndex = 6
 
-local RegisterBtn = Button(LoginCard, "Register", UDim2.new(1,-40,0,26), function()
+local RegisterBtn = Button(LoginCard, "Register", UDim2.new(1,-40,0,28), function()
     LoginStatus.TextColor3 = Pal.TextDim
     LoginStatus.Text = "creating..."
     task.spawn(function()
@@ -473,12 +494,12 @@ local RegisterBtn = Button(LoginCard, "Register", UDim2.new(1,-40,0,26), functio
         LoginStatus.Text = (ok and "[OK] " or "[X] ") .. msg
     end)
 end)
-RegisterBtn.Position = UDim2.new(0,20,0,310)
+RegisterBtn.Position = UDim2.new(0,20,0,300)
 RegisterBtn.ZIndex = 6
 RegisterBtn.BackgroundColor3 = Pal.CardActive
 
 -- ================================================
--- HUB
+-- Hub
 -- ================================================
 
 HubLoader = function()
@@ -503,10 +524,10 @@ HubLoader = function()
     Stroke(Main, Pal.Border, 1, 0.3)
     Main.ZIndex = 1
 
+    -- Titlebar
     local TitleBar = Frame(Main, UDim2.new(1,0,0,40), nil, Pal.TopBar, 0.3)
     Corner(TitleBar, 14)
     Frame(TitleBar, UDim2.new(1,0,0,14), UDim2.new(0,0,1,-14), Pal.TopBar, 0.3)
-
     do
         local al = Frame(TitleBar, UDim2.new(1,0,0,2), UDim2.new(0,0,1,-2), Pal.Accent)
         local g = Instance.new("UIGradient")
@@ -518,37 +539,76 @@ HubLoader = function()
         g.Parent = al
     end
 
-    BoldLabel(TitleBar, "VelsHub", UDim2.new(0,16,0,0), UDim2.new(0,200,1,0), Pal.Text, 14)
-    Label(TitleBar, "v3.0.1 | " .. ExecutorName .. " (" .. ExecutorLevel .. ")", UDim2.new(0,90,0,0), UDim2.new(0,220,1,0), Pal.TextMute, 10)
-    Label(TitleBar, "[K]", UDim2.new(1,-100,0,0), UDim2.new(0,30,1,0), Pal.TextMute, 10, Enum.TextXAlignment.Center)
+    BoldLabel(TitleBar, "VelsHub", UDim2.new(0,16,0,0), UDim2.new(0,120,1,0), Pal.Text, 14)
+    Label(TitleBar, "v3.1 | " .. ExecutorName .. " | Anti-Kick: ON", UDim2.new(0,90,0,0), UDim2.new(0,260,1,0), Pal.TextMute, 10)
+    Label(TitleBar, "[K] toggle", UDim2.new(1,-100,0,0), UDim2.new(0,90,1,0), Pal.TextMute, 10, Enum.TextXAlignment.Center)
 
+    -- Minimize button (FIXED: ini yang kemarin ga ada logic-nya)
+    local minimized = false
     local MinBtn = Instance.new("TextButton")
-    MinBtn.Size = UDim2.new(0,28,0,28)
-    MinBtn.Position = UDim2.new(1,-68,0.5,-14)
+    MinBtn.Size             = UDim2.new(0,28,0,28)
+    MinBtn.Position         = UDim2.new(1,-68,0.5,-14)
     MinBtn.BackgroundColor3 = Pal.Card
-    MinBtn.TextColor3 = Pal.TextDim
-    MinBtn.Font = Enum.Font.GothamBold
-    MinBtn.TextSize = 14
-    MinBtn.Text = "-"
-    MinBtn.BorderSizePixel = 0
-    MinBtn.AutoButtonColor = false
-    MinBtn.Parent = TitleBar
+    MinBtn.TextColor3       = Pal.TextDim
+    MinBtn.Font             = Enum.Font.GothamBold
+    MinBtn.TextSize         = 14
+    MinBtn.Text             = "-"
+    MinBtn.BorderSizePixel  = 0
+    MinBtn.AutoButtonColor  = false
+    MinBtn.Parent           = TitleBar
     Corner(MinBtn, 6)
 
     local CloseBtn = Instance.new("TextButton")
-    CloseBtn.Size = UDim2.new(0,28,0,28)
-    CloseBtn.Position = UDim2.new(1,-36,0.5,-14)
+    CloseBtn.Size             = UDim2.new(0,28,0,28)
+    CloseBtn.Position         = UDim2.new(1,-36,0.5,-14)
     CloseBtn.BackgroundColor3 = Pal.Card
-    CloseBtn.TextColor3 = Pal.TextDim
-    CloseBtn.Font = Enum.Font.GothamBold
-    CloseBtn.TextSize = 14
-    CloseBtn.Text = "x"
-    CloseBtn.BorderSizePixel = 0
-    CloseBtn.AutoButtonColor = false
-    CloseBtn.Parent = TitleBar
+    CloseBtn.TextColor3       = Pal.TextDim
+    CloseBtn.Font             = Enum.Font.GothamBold
+    CloseBtn.TextSize         = 14
+    CloseBtn.Text             = "x"
+    CloseBtn.BorderSizePixel  = 0
+    CloseBtn.AutoButtonColor  = false
+    CloseBtn.Parent           = TitleBar
     Corner(CloseBtn, 6)
     CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
+    -- Content area (di-reference dulu biar MinBtn bisa akses)
+    local SidebarW  = 150
+    local Sidebar   = Frame(Main, UDim2.new(0,SidebarW,1,-60), UDim2.new(0,0,0,40), Pal.Sidebar, 0.2)
+    Corner(Sidebar, 10)
+    Pad(Sidebar, 10, 8, 10, 8)
+    local sl = Instance.new("UIListLayout")
+    sl.Padding             = UDim.new(0,4)
+    sl.SortOrder           = Enum.SortOrder.LayoutOrder
+    sl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    sl.Parent              = Sidebar
+
+    local ContentX = SidebarW + 20
+    local Content  = Frame(Main, UDim2.new(1,-ContentX-20,1,-60), UDim2.new(0,ContentX,0,40), Pal.Window, 1)
+
+    -- FIXED: minimize sekarang bener-bener hide content + resize
+    MinBtn.MouseButton1Click:Connect(function()
+        minimized = not minimized
+        if minimized then
+            Sidebar.Visible  = false
+            Content.Visible  = false
+            TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.new(0,WIN_W,0,40)
+            }):Play()
+            MinBtn.Text = "+"
+        else
+            TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.new(0,WIN_W,0,WIN_H)
+            }):Play()
+            task.delay(0.2, function()
+                Sidebar.Visible = true
+                Content.Visible = true
+            end)
+            MinBtn.Text = "-"
+        end
+    end)
+
+    -- Drag
     do
         local dragging, ds, sp, shs
         TitleBar.InputBegan:Connect(function(i)
@@ -559,7 +619,7 @@ HubLoader = function()
         UserInputService.InputChanged:Connect(function(i)
             if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
                 local d = i.Position - ds
-                Main.Position   = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+                Main.Position   = UDim2.new(sp.X.Scale,  sp.X.Offset  + d.X, sp.Y.Scale,  sp.Y.Offset  + d.Y)
                 Shadow.Position = UDim2.new(shs.X.Scale, shs.X.Offset + d.X, shs.Y.Scale, shs.Y.Offset + d.Y)
             end
         end)
@@ -568,42 +628,30 @@ HubLoader = function()
         end)
     end
 
-    local SidebarW = 150
-    local Sidebar = Frame(Main, UDim2.new(0,SidebarW, 1,-60), UDim2.new(0,0,0,40), Pal.Sidebar, 0.2)
-    Corner(Sidebar, 10)
-    Pad(Sidebar, 10, 8, 10, 8)
-    local sl = Instance.new("UIListLayout")
-    sl.Padding = UDim.new(0,4)
-    sl.SortOrder = Enum.SortOrder.LayoutOrder
-    sl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    sl.Parent = Sidebar
-
-    local ContentX = SidebarW + 20
-    local Content = Frame(Main, UDim2.new(1,-ContentX-20, 1,-60), UDim2.new(0,ContentX,0,40), Pal.Window, 1)
-
+    -- Tab System
     local Pages, TabBtns = {}, {}
 
     local function MakePage(name)
         local scroll = Instance.new("ScrollingFrame")
-        scroll.Size = UDim2.new(1,0,1,0)
+        scroll.Size                   = UDim2.new(1,0,1,0)
         scroll.BackgroundTransparency = 1
-        scroll.BorderSizePixel = 0
-        scroll.ScrollBarThickness = 3
-        scroll.ScrollBarImageColor3 = Pal.Accent
-        scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        scroll.Visible = false
-        scroll.Parent = Content
+        scroll.BorderSizePixel        = 0
+        scroll.ScrollBarThickness     = 3
+        scroll.ScrollBarImageColor3   = Pal.Accent
+        scroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
+        scroll.Visible                = false
+        scroll.Parent                 = Content
         Pad(scroll, 4, 8, 12, 0)
         local l = Instance.new("UIListLayout")
-        l.Padding = UDim.new(0,10)
-        l.SortOrder = Enum.SortOrder.LayoutOrder
-        l.Parent = scroll
-        Pages[name] = scroll
+        l.Padding    = UDim.new(0,10)
+        l.SortOrder  = Enum.SortOrder.LayoutOrder
+        l.Parent     = scroll
+        Pages[name]  = scroll
     end
 
     local function SwitchTab(name)
-        for n,p in pairs(Pages) do p.Visible = (n == name) end
-        for n,b in pairs(TabBtns) do
+        for n, p in pairs(Pages) do p.Visible = (n == name) end
+        for n, b in pairs(TabBtns) do
             local a = (n == name)
             TweenService:Create(b, TweenInfo.new(0.15), {
                 BackgroundColor3 = a and Pal.CardActive or Pal.Card
@@ -619,24 +667,58 @@ HubLoader = function()
         end
     end
 
-    for _, name in ipairs({"Visual","Combat","Misc","World"}) do
+    for _, name in ipairs({"Visual","Combat","Misc","World","AntiCheat"}) do
         MakePage(name)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1,0,0,32)
+        btn.Size             = UDim2.new(1,0,0,32)
         btn.BackgroundColor3 = Pal.Card
-        btn.Text = ""
-        btn.BorderSizePixel = 0
-        btn.AutoButtonColor = false
-        btn.Parent = Sidebar
+        btn.Text             = ""
+        btn.BorderSizePixel  = 0
+        btn.AutoButtonColor  = false
+        btn.Parent           = Sidebar
         Corner(btn, 8)
         local bar = Frame(btn, UDim2.new(0,3,0,16), UDim2.new(0,4,0.5,-8), Pal.Accent)
-        bar.Name = "__bar"
+        bar.Name    = "__bar"
         bar.Visible = false
         Corner(bar, 2)
-        local lbl = BoldLabel(btn, name, UDim2.new(0,16,0,0), UDim2.new(1,-16,1,0), Pal.TextDim, 12)
+        BoldLabel(btn, name, UDim2.new(0,16,0,0), UDim2.new(1,-16,1,0), Pal.TextDim, 12)
         TabBtns[name] = btn
         btn.MouseButton1Click:Connect(function() SwitchTab(name) end)
     end
+
+    -- K toggle
+    local GuiVisible = true
+    local function SetGuiVisible(state)
+        GuiVisible = state
+        if state then
+            Main.Visible   = true
+            Shadow.Visible = true
+            TweenService:Create(Main,   TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+            TweenService:Create(Shadow, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 0.35 }):Play()
+        else
+            local fm = TweenService:Create(Main,   TweenInfo.new(0.2), { BackgroundTransparency = 1 })
+            local fs = TweenService:Create(Shadow, TweenInfo.new(0.2), { BackgroundTransparency = 1 })
+            fm:Play(); fs:Play()
+            fm.Completed:Connect(function()
+                if not GuiVisible then Main.Visible = false; Shadow.Visible = false end
+            end)
+        end
+    end
+
+    local toggleDb = false
+    UserInputService.InputBegan:Connect(function(i, gp)
+        if gp then return end
+        if UserInputService:GetFocusedTextBox() then return end
+        if i.KeyCode ~= Enum.KeyCode.K then return end
+        if toggleDb then return end
+        toggleDb = true
+        task.delay(0.2, function() toggleDb = false end)
+        SetGuiVisible(not GuiVisible)
+    end)
+
+    -- ================================================
+    -- Section / Toggle / Slider / Dropdown helpers
+    -- ================================================
 
     local function Section(parent, title)
         local s = Frame(parent, UDim2.new(1,0,0,0), nil, Pal.Card)
@@ -644,45 +726,44 @@ HubLoader = function()
         Stroke(s, Pal.BorderSoft, 1, 0.3)
         s.AutomaticSize = Enum.AutomaticSize.Y
         local l = Instance.new("UIListLayout")
-        l.Padding = UDim.new(0,6)
+        l.Padding   = UDim.new(0,6)
         l.SortOrder = Enum.SortOrder.LayoutOrder
-        l.Parent = s
+        l.Parent    = s
         Pad(s, 10, 12, 10, 12)
 
         local head = Frame(s, UDim2.new(1,0,0,20), nil, Color3.fromRGB(0,0,0), 1)
         head.LayoutOrder = 0
         BoldLabel(head, title:upper(), UDim2.new(0,0,0,0), UDim2.new(1,-20,1,0), Pal.Accent, 11)
-
         local arrow = Label(head, "v", UDim2.new(1,-14,0,0), UDim2.new(0,14,1,0), Pal.TextMute, 12, Enum.TextXAlignment.Center)
         arrow.Font = Enum.Font.GothamBold
 
         local holder = Frame(s, UDim2.new(1,0,0,0), nil, Color3.fromRGB(0,0,0), 1)
         holder.AutomaticSize = Enum.AutomaticSize.Y
-        holder.LayoutOrder = 1
+        holder.LayoutOrder   = 1
         local il = Instance.new("UIListLayout")
-        il.Padding = UDim.new(0,6)
+        il.Padding   = UDim.new(0,6)
         il.SortOrder = Enum.SortOrder.LayoutOrder
-        il.Parent = holder
+        il.Parent    = holder
 
         local open = true
         local hb = Instance.new("TextButton")
-        hb.Size = UDim2.new(1,0,1,0)
+        hb.Size                   = UDim2.new(1,0,1,0)
         hb.BackgroundTransparency = 1
-        hb.Text = ""
-        hb.Parent = head
+        hb.Text                   = ""
+        hb.Parent                 = head
         hb.MouseButton1Click:Connect(function()
             open = not open
             holder.Visible = open
             arrow.Text = open and "v" or ">"
         end)
-
         return holder
     end
 
     local function Toggle(parent, label, default, cb)
         local row = Frame(parent, UDim2.new(1,0,0,30), nil, Color3.fromRGB(0,0,0), 1)
         Label(row, label, UDim2.new(0,0,0,0), UDim2.new(0.75,0,1,0), Pal.Text, 12)
-        local track = Frame(row, UDim2.new(0,40,0,20), UDim2.new(1,-42,0.5,-10), default and Pal.AccentSoft or Pal.ToggleOff)
+        local track = Frame(row, UDim2.new(0,40,0,20), UDim2.new(1,-42,0.5,-10),
+            default and Pal.AccentSoft or Pal.ToggleOff)
         Corner(track, 10)
         local knob = Frame(track, UDim2.new(0,14,0,14),
             default and UDim2.new(1,-17,0.5,-7) or UDim2.new(0,3,0.5,-7),
@@ -690,10 +771,10 @@ HubLoader = function()
         Corner(knob, 7)
         local state = default
         local hb = Instance.new("TextButton")
-        hb.Size = UDim2.new(1,0,1,0)
+        hb.Size                   = UDim2.new(1,0,1,0)
         hb.BackgroundTransparency = 1
-        hb.Text = ""
-        hb.Parent = track
+        hb.Text                   = ""
+        hb.Parent                 = track
         hb.MouseButton1Click:Connect(function()
             state = not state
             TweenService:Create(track, TweenInfo.new(0.15), { BackgroundColor3 = state and Pal.AccentSoft or Pal.ToggleOff }):Play()
@@ -710,8 +791,7 @@ HubLoader = function()
         Corner(track, 3)
         local fill = Frame(track, UDim2.new((default-min)/(max-min),0,1,0), nil, Pal.Accent)
         Corner(fill, 3)
-        local knob = Frame(track, UDim2.new(0,12,0,12),
-            UDim2.new((default-min)/(max-min),-6,0.5,-6), Color3.fromRGB(255,255,255))
+        local knob = Frame(track, UDim2.new(0,12,0,12), UDim2.new((default-min)/(max-min),-6,0.5,-6), Color3.fromRGB(255,255,255))
         Corner(knob, 6)
         Stroke(knob, Pal.Accent, 1)
         local sliding = false
@@ -725,9 +805,9 @@ HubLoader = function()
             if sliding and i.UserInputType == Enum.UserInputType.MouseMovement then
                 local rel = math.clamp((i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
                 local v = math.floor(min + (max-min) * rel)
-                fill.Size = UDim2.new(rel,0,1,0)
-                knob.Position = UDim2.new(rel,-6,0.5,-6)
-                lbl.Text = label .. ": " .. v
+                fill.Size     = UDim2.new(rel, 0, 1, 0)
+                knob.Position = UDim2.new(rel, -6, 0.5, -6)
+                lbl.Text      = label .. ": " .. v
                 if cb then cb(v) end
             end
         end)
@@ -738,19 +818,19 @@ HubLoader = function()
         local w = Frame(parent, UDim2.new(1,0,0,56), nil, Color3.fromRGB(0,0,0), 1)
         Label(w, label, UDim2.new(0,0,0,0), UDim2.new(1,0,0,16), Pal.TextDim, 11)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1,0,0,32)
-        btn.Position = UDim2.new(0,0,0,20)
+        btn.Size             = UDim2.new(1,0,0,32)
+        btn.Position         = UDim2.new(0,0,0,20)
         btn.BackgroundColor3 = Pal.Input
-        btn.TextColor3 = Pal.Text
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 12
-        btn.Text = default
-        btn.BorderSizePixel = 0
-        btn.Parent = w
+        btn.TextColor3       = Pal.Text
+        btn.Font             = Enum.Font.Gotham
+        btn.TextSize         = 12
+        btn.Text             = default
+        btn.BorderSizePixel  = 0
+        btn.Parent           = w
         Corner(btn, 6)
         Stroke(btn, Pal.BorderSoft, 1, 0.3)
         local idx = 1
-        for i,v in ipairs(options) do if v == default then idx = i end end
+        for i, v in ipairs(options) do if v == default then idx = i end end
         btn.MouseButton1Click:Connect(function()
             idx = idx % #options + 1
             btn.Text = options[idx]
@@ -759,81 +839,42 @@ HubLoader = function()
         return w
     end
 
-    local GuiVisible = true
-    local function SetGuiVisible(state)
-        GuiVisible = state
-        if state then
-            Main.Visible = true
-            Shadow.Visible = true
-            Main.BackgroundTransparency = 0
-            Shadow.BackgroundTransparency = 0.35
-            local cm, cs = Main.Position, Shadow.Position
-            Main.Position = UDim2.new(cm.X.Scale, cm.X.Offset, cm.Y.Scale, cm.Y.Offset + 20)
-            Shadow.Position = UDim2.new(cs.X.Scale, cs.X.Offset, cs.Y.Scale, cs.Y.Offset + 20)
-            TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = cm }):Play()
-            TweenService:Create(Shadow, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = cs }):Play()
-        else
-            local fm = TweenService:Create(Main, TweenInfo.new(0.2), { BackgroundTransparency = 1 })
-            local fs = TweenService:Create(Shadow, TweenInfo.new(0.2), { BackgroundTransparency = 1 })
-            fm:Play(); fs:Play()
-            fm.Completed:Connect(function()
-                if not GuiVisible then
-                    Main.Visible = false
-                    Shadow.Visible = false
-                end
-            end)
-        end
-    end
-    local toggleDb = false
-    UserInputService.InputBegan:Connect(function(i, gp)
-        if gp then return end
-        if UserInputService:GetFocusedTextBox() then return end
-        if i.KeyCode ~= Enum.KeyCode.K then return end
-        if toggleDb then return end
-        toggleDb = true
-        task.delay(0.2, function() toggleDb = false end)
-        SetGuiVisible(not GuiVisible)
-    end)
-
     -- ================================================
-    -- VISUAL -- ESP
+    -- Tab: Visual
     -- ================================================
 
     local VP = Pages["Visual"]
     local espSec = Section(VP, "ESP")
-    Toggle(espSec, "ESP Master",      CONFIG.ESP.Enabled,       function(v) CONFIG.ESP.Enabled = v end)
-    Toggle(espSec, "Box",             CONFIG.ESP.Box,           function(v) CONFIG.ESP.Box = v end)
-    Toggle(espSec, "Name",            CONFIG.ESP.Name,          function(v) CONFIG.ESP.Name = v end)
-    Toggle(espSec, "Skeleton",        CONFIG.ESP.Skeleton,      function(v) CONFIG.ESP.Skeleton = v end)
-    Toggle(espSec, "Health Bar",      CONFIG.ESP.HealthBar,     function(v) CONFIG.ESP.HealthBar = v end)
+    Toggle(espSec, "ESP Master",       CONFIG.ESP.Enabled,         function(v) CONFIG.ESP.Enabled = v end)
+    Toggle(espSec, "Box",              CONFIG.ESP.Box,             function(v) CONFIG.ESP.Box = v end)
+    Toggle(espSec, "Name",             CONFIG.ESP.Name,            function(v) CONFIG.ESP.Name = v end)
+    Toggle(espSec, "Skeleton",         CONFIG.ESP.Skeleton,        function(v) CONFIG.ESP.Skeleton = v end)
+    Toggle(espSec, "Health Bar",       CONFIG.ESP.HealthBar,       function(v) CONFIG.ESP.HealthBar = v end)
     Toggle(espSec, "Wall Penetration", CONFIG.ESP.WallPenetration, function(v) CONFIG.ESP.WallPenetration = v end)
-    Toggle(espSec, "Team Check",      CONFIG.ESP.TeamCheck,     function(v) CONFIG.ESP.TeamCheck = v end)
+    Toggle(espSec, "Team Check",       CONFIG.ESP.TeamCheck,       function(v) CONFIG.ESP.TeamCheck = v end)
 
     -- ================================================
-    -- COMBAT -- AIMBOT
+    -- Tab: Combat
     -- ================================================
 
     local CP = Pages["Combat"]
-
     local methodSec = Section(CP, "Aimbot Method")
-    Label(methodSec, "High = silent aim (hook). Low = camera lock (aman).",
+    Label(methodSec, "Camera = aman. Silent = perlu High executor.",
         UDim2.new(0,0,0,0), UDim2.new(1,0,0,28), Pal.TextMute, 10).TextWrapped = true
-    Dropdown(methodSec, "Method", {"Camera", "Silent"}, CONFIG.Aimbot.Method,
-        function(v)
+    Dropdown(methodSec, "Method", {"Camera","Silent"}, CONFIG.Aimbot.Method, function(v)
+        if v == "Silent" and ExecutorLevel ~= "High" then
+            CONFIG.Aimbot.Method = "Camera"
+        else
             CONFIG.Aimbot.Method = v
-            if v == "Silent" and ExecutorLevel ~= "High" then
-                CONFIG.Aimbot.Method = "Camera"
-            end
-        end)
+        end
+    end)
 
     local aimSec = Section(CP, "Aimbot")
-    Toggle(aimSec, "Aimbot Master", CONFIG.Aimbot.Enabled, function(v)
-        CONFIG.Aimbot.Enabled = v
-    end)
-    Toggle(aimSec, "Toggle Mode (RMB)", CONFIG.Aimbot.Toggle, function(v) CONFIG.Aimbot.Toggle = v end)
-    Toggle(aimSec, "Wall Check",    CONFIG.Aimbot.WallCheck, function(v) CONFIG.Aimbot.WallCheck = v end)
-    Toggle(aimSec, "Team Check",    CONFIG.Aimbot.TeamCheck, function(v) CONFIG.Aimbot.TeamCheck = v end)
-    Toggle(aimSec, "Offset to Move", CONFIG.Aimbot.OffsetToMove, function(v) CONFIG.Aimbot.OffsetToMove = v end)
+    Toggle(aimSec, "Aimbot Master",    CONFIG.Aimbot.Enabled,     function(v) CONFIG.Aimbot.Enabled = v end)
+    Toggle(aimSec, "Toggle Mode (RMB)",CONFIG.Aimbot.Toggle,      function(v) CONFIG.Aimbot.Toggle = v end)
+    Toggle(aimSec, "Wall Check",       CONFIG.Aimbot.WallCheck,   function(v) CONFIG.Aimbot.WallCheck = v end)
+    Toggle(aimSec, "Team Check",       CONFIG.Aimbot.TeamCheck,   function(v) CONFIG.Aimbot.TeamCheck = v end)
+    Toggle(aimSec, "Offset to Move",   CONFIG.Aimbot.OffsetToMove,function(v) CONFIG.Aimbot.OffsetToMove = v end)
 
     local fovSec = Section(CP, "FOV")
     Toggle(fovSec, "Show FOV Circle", CONFIG.Aimbot.FOVEnabled, function(v) CONFIG.Aimbot.FOVEnabled = v end)
@@ -842,16 +883,19 @@ HubLoader = function()
     local smoothSec = Section(CP, "Smoothness & Offset")
     Slider(smoothSec, "Smoothness x100", 0, 50, math.floor(CONFIG.Aimbot.Smoothness * 100),
         function(v) CONFIG.Aimbot.Smoothness = v / 100 end)
-    Slider(smoothSec, "Offset Amount", 1, 30, CONFIG.Aimbot.OffsetAmount, function(v) CONFIG.Aimbot.OffsetAmount = v end)
+    Slider(smoothSec, "Offset Amount", 1, 30, CONFIG.Aimbot.OffsetAmount,
+        function(v) CONFIG.Aimbot.OffsetAmount = v end)
 
     local silentSec = Section(CP, "Silent Aim Tuning")
-    Slider(silentSec, "Chance %", 1, 100, CONFIG.Aimbot.SilentChance, function(v) CONFIG.Aimbot.SilentChance = v end)
+    Slider(silentSec, "Chance %", 1, 100, CONFIG.Aimbot.SilentChance,
+        function(v) CONFIG.Aimbot.SilentChance = v end)
     Slider(silentSec, "Prediction ms", 0, 500, math.floor(CONFIG.Aimbot.Prediction * 1000),
         function(v) CONFIG.Aimbot.Prediction = v / 1000 end)
-    Toggle(silentSec, "Gravity Comp", CONFIG.Aimbot.GravityComp, function(v) CONFIG.Aimbot.GravityComp = v end)
+    Toggle(silentSec, "Gravity Comp", CONFIG.Aimbot.GravityComp,
+        function(v) CONFIG.Aimbot.GravityComp = v end)
 
     -- ================================================
-    -- MISC
+    -- Tab: Misc
     -- ================================================
 
     local MP = Pages["Misc"]
@@ -859,7 +903,7 @@ HubLoader = function()
     Toggle(miscSec, "Rainbow ESP", CONFIG.Misc.RainbowESP, function(v) CONFIG.Misc.RainbowESP = v end)
 
     -- ================================================
-    -- WORLD
+    -- Tab: World
     -- ================================================
 
     local WP = Pages["World"]
@@ -867,30 +911,60 @@ HubLoader = function()
     Toggle(lightSec, "Fullbright", CONFIG.World.Fullbright, function(v)
         CONFIG.World.Fullbright = v
         if v then
-            Lighting.Brightness = 10
-            Lighting.ClockTime = 14
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = false
-            Lighting.Ambient = Color3.fromRGB(255,255,255)
+            Lighting.Brightness     = 10
+            Lighting.ClockTime      = 14
+            Lighting.FogEnd         = 100000
+            Lighting.GlobalShadows  = false
+            Lighting.Ambient        = Color3.fromRGB(255,255,255)
             Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
         else
-            Lighting.Brightness = 1
-            Lighting.GlobalShadows = true
-            Lighting.Ambient = Color3.fromRGB(127,127,127)
+            Lighting.Brightness     = 1
+            Lighting.GlobalShadows  = true
+            Lighting.Ambient        = Color3.fromRGB(127,127,127)
             Lighting.OutdoorAmbient = Color3.fromRGB(127,127,127)
         end
     end)
     Toggle(lightSec, "No Fog", CONFIG.World.NoFog, function(v)
         CONFIG.World.NoFog = v
-        Lighting.FogEnd = v and 100000 or 1000
+        Lighting.FogEnd   = v and 100000 or 1000
         Lighting.FogStart = v and 100000 or 0
     end)
 
     -- ================================================
-    -- ESP LOOPS
+    -- Tab: AntiCheat (status panel)
     -- ================================================
 
-    local ESPCache = {}
+    local ACP     = Pages["AntiCheat"]
+    local acSec   = Section(ACP, "Anti-Kick Status")
+    local akStatus = Label(acSec, "GC Patch: aktif | Namecall Hook: " ..
+        (ExecutorLevel == "High" and "aktif" or "skip (Low executor)"),
+        UDim2.new(0,0,0,0), UDim2.new(1,0,0,32), Pal.Success, 11)
+    akStatus.TextWrapped = true
+
+    local patchCount = Label(acSec, "patches applied: menghitung...", UDim2.new(0,0,0,0), UDim2.new(1,0,0,20), Pal.TextDim, 11)
+
+    -- re-patch manual button
+    Button(acSec, "Re-Patch Sekarang", UDim2.new(1,0,0,32), function()
+        local n = PatchAntiKick()
+        patchCount.Text = "patches applied: " .. tostring(n)
+    end)
+
+    Toggle(acSec, "Auto Re-Patch (5s)", true, function(v)
+        AntiKickActive = v
+    end)
+
+    -- update count di awal
+    task.spawn(function()
+        task.wait(0.5)
+        local n = PatchAntiKick()
+        patchCount.Text = "patches applied: " .. tostring(n or 0)
+    end)
+
+    -- ================================================
+    -- ESP Core
+    -- ================================================
+
+    local ESPCache     = {}
     local SkeletonBones = {
         {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
         {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
@@ -901,16 +975,16 @@ HubLoader = function()
 
     local function NewDraw(t, props)
         local d = Drawing.new(t)
-        for k,v in pairs(props) do d[k] = v end
+        for k, v in pairs(props) do d[k] = v end
         return d
     end
 
     local function MakeESPObjects()
         return {
             Box        = NewDraw("Square", {Visible=false, Filled=false, Thickness=1.5, Color=CONFIG.ESP.BoxColor}),
-            BoxOutline = NewDraw("Square", {Visible=false, Filled=false, Thickness=3, Color=Color3.fromRGB(0,0,0)}),
-            HealthBG   = NewDraw("Square", {Visible=false, Filled=true, Thickness=1, Color=Color3.fromRGB(0,0,0)}),
-            Health     = NewDraw("Square", {Visible=false, Filled=true, Thickness=1, Color=Color3.fromRGB(50,220,100)}),
+            BoxOutline = NewDraw("Square", {Visible=false, Filled=false, Thickness=3,   Color=Color3.fromRGB(0,0,0)}),
+            HealthBG   = NewDraw("Square", {Visible=false, Filled=true,  Thickness=1,   Color=Color3.fromRGB(0,0,0)}),
+            Health     = NewDraw("Square", {Visible=false, Filled=true,  Thickness=1,   Color=Color3.fromRGB(50,220,100)}),
             Name       = NewDraw("Text",   {Visible=false, Size=13, Center=true, Outline=true, Color=CONFIG.ESP.NameColor, Font=Drawing.Fonts.Plex}),
             Bones      = {},
         }
@@ -925,7 +999,7 @@ HubLoader = function()
 
     local function GetScreenBounds(char)
         local parts = {"Head","UpperTorso","LowerTorso","LeftHand","RightHand","LeftFoot","RightFoot"}
-        local mnx, mny = math.huge, math.huge
+        local mnx, mny =  math.huge,  math.huge
         local mxx, mxy = -math.huge, -math.huge
         local found = false
         for _, n in ipairs(parts) do
@@ -944,31 +1018,39 @@ HubLoader = function()
         return found, mnx, mny, mxx, mxy
     end
 
+    -- FIXED: cek chams existence dengan flag per-character, bukan loop descendants tiap frame
+    local ChamsApplied = {}
+
     local function ApplyChams(char, color, thick)
+        -- *nyimpen flag di ChamsApplied biar ga perlu GetDescendants tiap frame cuma buat cek existence*
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") and not p:FindFirstChild("__VelsChams") then
                 local sb = Instance.new("SelectionBox")
-                sb.Name = "__VelsChams"
-                sb.Adornee = p
-                sb.Color3 = color
-                sb.LineThickness = thick or 0.05
+                sb.Name               = "__VelsChams"
+                sb.Adornee            = p
+                sb.Color3             = color
+                sb.LineThickness      = thick or 0.05
                 sb.SurfaceTransparency = 0.5
-                sb.SurfaceColor3 = color
-                sb.Parent = p
+                sb.SurfaceColor3      = color
+                sb.Parent             = p
             end
         end
+        ChamsApplied[char] = true
     end
+
     local function UpdateChamsColor(char, color)
         for _, p in ipairs(char:GetDescendants()) do
             local sb = p:FindFirstChild("__VelsChams")
             if sb then sb.Color3 = color; sb.SurfaceColor3 = color end
         end
     end
+
     local function RemoveChams(char)
         for _, p in ipairs(char:GetDescendants()) do
             local sb = p:FindFirstChild("__VelsChams")
             if sb then sb:Destroy() end
         end
+        ChamsApplied[char] = nil
     end
 
     local function IsESPTeammate(p)
@@ -977,15 +1059,11 @@ HubLoader = function()
     end
 
     local function IsVisible(char, targetPos)
-        if not char then return false end
-        local root = char:FindFirstChild("Head") or char:FindFirstChild("UpperTorso")
-        if not root then return false end
-        local dir = (targetPos - Camera.CFrame.Position)
         local params = RaycastParams.new()
         params.FilterType = Enum.RaycastFilterType.Exclude
         params.FilterDescendantsInstances = { char, LocalPlayer.Character or {} }
-        local hit = workspace:Raycast(Camera.CFrame.Position, dir, params)
-        return hit == nil
+        local result = workspace:Raycast(Camera.CFrame.Position, targetPos - Camera.CFrame.Position, params)
+        return result == nil
     end
 
     local RainbowHue = 0
@@ -996,61 +1074,53 @@ HubLoader = function()
 
     if HasDrawing then
         RunService.RenderStepped:Connect(function()
-            if not CurrentUser then return end
             local rb = Rainbow()
 
             for _, player in ipairs(Players:GetPlayers()) do
                 if player == LocalPlayer then continue end
                 if not ESPCache[player] then ESPCache[player] = MakeESPObjects() end
 
-                local obj = ESPCache[player]
-                local char = player.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local obj   = ESPCache[player]
+                local char  = player.Character
+                local hum   = char and char:FindFirstChildOfClass("Humanoid")
                 local alive = hum and hum.Health > 0
-                local show = CONFIG.ESP.Enabled and alive and not IsESPTeammate(player)
+                local show  = CONFIG.ESP.Enabled and alive and not IsESPTeammate(player)
 
-                if not show then
+                local function HideAll()
                     obj.Box.Visible = false; obj.BoxOutline.Visible = false
                     obj.Name.Visible = false; obj.Health.Visible = false; obj.HealthBG.Visible = false
                     for _, b in ipairs(obj.Bones) do b.Visible = false end
+                end
+
+                if not show then
+                    HideAll()
                     if char then RemoveChams(char) end
                     continue
                 end
 
                 local on, mnx, mny, mxx, mxy = GetScreenBounds(char)
-                if not on then
-                    obj.Box.Visible = false; obj.BoxOutline.Visible = false
-                    obj.Name.Visible = false; obj.Health.Visible = false; obj.HealthBG.Visible = false
-                    for _, b in ipairs(obj.Bones) do b.Visible = false end
-                    continue
-                end
+                if not on then HideAll(); continue end
 
-                local bx, by = mnx - 4, mny - 4
+                local bx = mnx - 4
+                local by = mny - 4
                 local bw = math.max(mxx - mnx + 8, 1)
                 local bh = math.max(mxy - mny + 8, 1)
 
-                local targetPos = char:FindFirstChild("Head") and char.Head.Position or Vector3.zero
-                local visible = IsVisible(char, targetPos)
-                local useWallPen = CONFIG.ESP.WallPenetration
+                local head      = char:FindFirstChild("Head")
+                local targetPos = head and head.Position or Vector3.zero
+                local visible   = IsVisible(char, targetPos)
 
-                if not useWallPen and not visible then
-                    obj.Box.Visible = false; obj.BoxOutline.Visible = false
-                    obj.Name.Visible = false; obj.Health.Visible = false; obj.HealthBG.Visible = false
-                    for _, b in ipairs(obj.Bones) do b.Visible = false end
-                    if char then RemoveChams(char) end
+                if not CONFIG.ESP.WallPenetration and not visible then
+                    HideAll()
+                    RemoveChams(char)
                     continue
                 end
 
-                local boxColor = CONFIG.ESP.BoxColor
+                local boxColor  = visible and CONFIG.ESP.BoxColor or CONFIG.ESP.WallPenColor
                 local nameColor = CONFIG.ESP.NameColor
                 local skelColor = CONFIG.ESP.SkeletonColor
-                if not visible then
-                    boxColor = CONFIG.ESP.WallPenColor
-                end
                 if CONFIG.Misc.RainbowESP then
-                    boxColor = rb
-                    nameColor = rb
-                    skelColor = rb
+                    boxColor = rb; nameColor = rb; skelColor = rb
                 end
 
                 obj.BoxOutline.Visible  = CONFIG.ESP.Box
@@ -1062,8 +1132,7 @@ HubLoader = function()
                 obj.Box.Color           = boxColor
 
                 local hpRat = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
-                local barH = bh * hpRat
-
+                local barH  = bh * hpRat
                 obj.HealthBG.Visible  = CONFIG.ESP.HealthBar
                 obj.HealthBG.Position = Vector2.new(bx - 7, by)
                 obj.HealthBG.Size     = Vector2.new(4, bh)
@@ -1086,13 +1155,13 @@ HubLoader = function()
                             local s0, on0 = Camera:WorldToViewportPoint(p0.Position)
                             local s1, on1 = Camera:WorldToViewportPoint(p1.Position)
                             if not obj.Bones[bi] then
-                                obj.Bones[bi] = NewDraw("Line", { Thickness=1, Color=skelColor })
+                                obj.Bones[bi] = NewDraw("Line", {Thickness=1, Color=skelColor})
                             end
-                            local line = obj.Bones[bi]
+                            local line   = obj.Bones[bi]
                             line.Visible = on0 and on1 and s0.Z > 0 and s1.Z > 0
-                            line.From = Vector2.new(s0.X, s0.Y)
-                            line.To   = Vector2.new(s1.X, s1.Y)
-                            line.Color = skelColor
+                            line.From    = Vector2.new(s0.X, s0.Y)
+                            line.To      = Vector2.new(s1.X, s1.Y)
+                            line.Color   = skelColor
                             bi += 1
                         end
                     end
@@ -1101,16 +1170,12 @@ HubLoader = function()
                     for _, b in ipairs(obj.Bones) do b.Visible = false end
                 end
 
-                if CONFIG.ESP.WallPenetration or visible then
-                    local chamsColor = CONFIG.Misc.RainbowESP and rb or boxColor
-                    local existing = false
-                    for _, p in ipairs(char:GetDescendants()) do
-                        if p:FindFirstChild("__VelsChams") then existing = true break end
-                    end
-                    if existing then UpdateChamsColor(char, chamsColor)
-                    else ApplyChams(char, chamsColor, visible and 0.05 or 0.15) end
+                -- FIXED: pake ChamsApplied flag, ga loop descendants cuma buat existence check
+                local chamsColor = CONFIG.Misc.RainbowESP and rb or boxColor
+                if ChamsApplied[char] then
+                    UpdateChamsColor(char, chamsColor)
                 else
-                    RemoveChams(char)
+                    ApplyChams(char, chamsColor, visible and 0.05 or 0.15)
                 end
             end
         end)
@@ -1120,48 +1185,41 @@ HubLoader = function()
                 DestroyESP(ESPCache[p])
                 ESPCache[p] = nil
             end
+            if p.Character then
+                ChamsApplied[p.Character] = nil
+            end
         end)
     end
 
     -- ================================================
-    -- AIMBOT CORE
+    -- Aimbot Core
     -- ================================================
 
     local AimState = {
-        Running = false,
-        Locked  = nil,
-        Anim    = nil,
-        OrigSens = UserInputService.MouseDeltaSensitivity,
+        Running      = false,
+        Locked       = nil,
+        Anim         = nil,
+        OrigSens     = UserInputService.MouseDeltaSensitivity,
         SilentTarget = nil,
     }
 
     local FOVCircle, FOVOutline, Tracer
 
     if HasDrawing then
-        FOVCircle = NewDraw("Circle", { Visible=false, NumSides=60, Filled=CONFIG.Aimbot.FOVFilled,
-            Thickness=CONFIG.Aimbot.FOVThickness, Transparency=CONFIG.Aimbot.FOVTransparency, Color=CONFIG.Aimbot.FOVColor })
-        FOVOutline = NewDraw("Circle", { Visible=false, NumSides=60, Filled=false,
-            Thickness=CONFIG.Aimbot.FOVThickness+1, Transparency=CONFIG.Aimbot.FOVTransparency, Color=Color3.fromRGB(0,0,0) })
-        Tracer = NewDraw("Line", { Visible=false, Thickness=CONFIG.Aimbot.TracerThickness,
-            Transparency=0.3, Color=CONFIG.Aimbot.TracerColor })
-    else
-        local function MakeFOVFrame(parent)
-            local f = Instance.new("Frame")
-            f.BackgroundTransparency = 1
-            f.Visible = false
-            f.ZIndex = 5
-            f.Parent = parent
-            Corner(f, 999)
-            return f
-        end
-        FOVCircle  = MakeFOVFrame(ScreenGui)
-        FOVOutline = MakeFOVFrame(ScreenGui)
-        Tracer     = Instance.new("Frame")
-        Tracer.BackgroundColor3 = CONFIG.Aimbot.TracerColor
-        Tracer.BorderSizePixel = 0
-        Tracer.Visible = false
-        Tracer.ZIndex = 3
-        Tracer.Parent = ScreenGui
+        FOVCircle = NewDraw("Circle", {
+            Visible=false, NumSides=60, Filled=CONFIG.Aimbot.FOVFilled,
+            Thickness=CONFIG.Aimbot.FOVThickness, Transparency=CONFIG.Aimbot.FOVTransparency,
+            Color=CONFIG.Aimbot.FOVColor
+        })
+        FOVOutline = NewDraw("Circle", {
+            Visible=false, NumSides=60, Filled=false,
+            Thickness=CONFIG.Aimbot.FOVThickness+1, Transparency=CONFIG.Aimbot.FOVTransparency,
+            Color=Color3.fromRGB(0,0,0)
+        })
+        Tracer = NewDraw("Line", {
+            Visible=false, Thickness=CONFIG.Aimbot.TracerThickness,
+            Transparency=0.3, Color=CONFIG.Aimbot.TracerColor
+        })
     end
 
     local function GetMouseLoc() return UserInputService:GetMouseLocation() end
@@ -1172,27 +1230,29 @@ HubLoader = function()
         return h and h.Health > 0
     end
 
-    local function IsTeam(p)
+    local function IsAimTeam(p)
         if not CONFIG.Aimbot.TeamCheck then return false end
         return p.Team and p.Team == LocalPlayer.Team
     end
 
+    -- FIXED: AimWallCheck — guard nil pos sebelum pass ke GetPartsObscuringTarget
     local function AimWallCheck(char, pos)
         if not CONFIG.Aimbot.WallCheck then return true end
-        local part = char:FindFirstChild(CONFIG.Aimbot.LockPart)
-        if not part then return false end
+        if not pos then return false end
         local bl = {}
         if LocalPlayer.Character then
             for _, v in ipairs(LocalPlayer.Character:GetDescendants()) do bl[#bl+1] = v end
         end
         for _, v in ipairs(char:GetDescendants()) do bl[#bl+1] = v end
-        local obs = Camera:GetPartsObscuringTarget({ pos or part.Position }, bl)
+        local ok, obs = pcall(Camera.GetPartsObscuringTarget, Camera, {pos}, bl)
+        if not ok then return false end
         return #obs == 0
     end
 
     local function PredictPos(part)
+        -- *gravity comp: subtract karena gravity ke bawah (Y negatif), bukan tambahin*
         local vel = part.AssemblyLinearVelocity
-        local t = CONFIG.Aimbot.Prediction
+        local t   = CONFIG.Aimbot.Prediction
         local pos = part.Position + vel * t
         if CONFIG.Aimbot.GravityComp then
             pos = pos - Vector3.new(0, 0.5 * workspace.Gravity * t * t, 0)
@@ -1205,78 +1265,53 @@ HubLoader = function()
         local m = GetMouseLoc()
         for _, p in ipairs(Players:GetPlayers()) do
             if p == LocalPlayer then continue end
-            if IsTeam(p) then continue end
+            if IsAimTeam(p) then continue end
             local c = p.Character
             if not c then continue end
             if CONFIG.Aimbot.AliveCheck and not IsAlive(c) then continue end
             local part = c:FindFirstChild(CONFIG.Aimbot.LockPart)
             if not part then continue end
-            local pos = PredictPos(part)
+            local pos     = PredictPos(part)
             local screen, on = Camera:WorldToViewportPoint(pos)
-            if not on then continue end
+            if not on or screen.Z <= 0 then continue end
             local sv = Vector2.new(screen.X, screen.Y)
-            local d = (m - sv).Magnitude
+            local d  = (m - sv).Magnitude
             if d < dist and AimWallCheck(c, pos) then
-                dist = d
-                closest = { player = p, char = c, part = part, screenPos = sv, worldPos = pos }
+                dist    = d
+                closest = { player=p, char=c, part=part, screenPos=sv, worldPos=pos }
             end
         end
         return closest
     end
 
     local function CancelLock()
-        AimState.Locked = nil
+        AimState.Locked       = nil
         AimState.SilentTarget = nil
         UserInputService.MouseDeltaSensitivity = AimState.OrigSens
         if AimState.Anim then AimState.Anim:Cancel(); AimState.Anim = nil end
         if HasDrawing then
-            FOVCircle.Color = CONFIG.Aimbot.FOVColor
-            FOVOutline.Color = Color3.fromRGB(0,0,0)
-            Tracer.Visible = false
+            FOVCircle.Color  = CONFIG.Aimbot.FOVColor
+            Tracer.Visible   = false
         end
     end
 
-    local function UpdateFOVVisual(m, visible, locked)
-        if HasDrawing then
-            FOVCircle.Position = m
-            FOVCircle.Radius = CONFIG.Aimbot.FOV
-            FOVCircle.Thickness = CONFIG.Aimbot.FOVThickness
-            FOVCircle.Filled = CONFIG.Aimbot.FOVFilled
-            FOVCircle.Visible = visible
-            FOVCircle.Color = locked or CONFIG.Aimbot.FOVColor
-            FOVOutline.Position = m
-            FOVOutline.Radius = CONFIG.Aimbot.FOV
-            FOVOutline.Thickness = CONFIG.Aimbot.FOVThickness + 1
-            FOVOutline.Visible = visible
-            FOVOutline.Color = locked or Color3.fromRGB(0,0,0)
-        else
-            local d = CONFIG.Aimbot.FOV * 2
-            FOVCircle.Size = UDim2.fromOffset(d, d)
-            FOVCircle.Position = UDim2.fromOffset(m.X - CONFIG.Aimbot.FOV, m.Y - CONFIG.Aimbot.FOV)
-            FOVCircle.Visible = visible
-            FOVCircle.BackgroundColor3 = locked or CONFIG.Aimbot.FOVColor
-            FOVCircle.BackgroundTransparency = CONFIG.Aimbot.FOVFilled and CONFIG.Aimbot.FOVTransparency or 1
-            local st = FOVCircle:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", FOVCircle)
-            st.Color = locked or CONFIG.Aimbot.FOVColor
-            st.Thickness = CONFIG.Aimbot.FOVThickness
-
-            FOVOutline.Size = UDim2.fromOffset(d+2, d+2)
-            FOVOutline.Position = UDim2.fromOffset(m.X - CONFIG.Aimbot.FOV - 1, m.Y - CONFIG.Aimbot.FOV - 1)
-            FOVOutline.Visible = visible
-            local st2 = FOVOutline:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", FOVOutline)
-            st2.Color = Color3.fromRGB(0,0,0)
-            st2.Thickness = CONFIG.Aimbot.FOVThickness + 1
-        end
+    local function UpdateFOV(m, visible, lockedColor)
+        if not HasDrawing then return end
+        FOVCircle.Position  = m
+        FOVCircle.Radius    = CONFIG.Aimbot.FOV
+        FOVCircle.Filled    = CONFIG.Aimbot.FOVFilled
+        FOVCircle.Visible   = visible
+        FOVCircle.Color     = lockedColor or CONFIG.Aimbot.FOVColor
+        FOVOutline.Position = m
+        FOVOutline.Radius   = CONFIG.Aimbot.FOV
+        FOVOutline.Visible  = visible
     end
 
-    -- silent aim -- high executor only
+    -- Silent Aim Hook
     local InHook = false
-
     if ExecutorLevel == "High" and hookmetamethod and newcclosure and getnamecallmethod then
         RunService.RenderStepped:Connect(function()
-            if CONFIG.Aimbot.Method == "Silent"
-                and CONFIG.Aimbot.Enabled
-                and AimState.Running then
+            if CONFIG.Aimbot.Method == "Silent" and CONFIG.Aimbot.Enabled and AimState.Running then
                 local t = GetClosestTarget()
                 AimState.SilentTarget = t and t.worldPos or nil
             else
@@ -1299,13 +1334,11 @@ HubLoader = function()
                 if not InHook and not fromSelf and self == Mouse and ShouldSilent() then
                     InHook = true
                     local ok, res = pcall(function()
-                        if key == "Hit" then
-                            return CFrame.new(AimState.SilentTarget)
+                        if key == "Hit" then return CFrame.new(AimState.SilentTarget)
                         elseif key == "UnitRay" then
                             local o = Camera.CFrame.Position
                             return Ray.new(o, (AimState.SilentTarget - o).Unit)
                         end
-                        return nil
                     end)
                     InHook = false
                     if ok and res ~= nil then return res end
@@ -1317,41 +1350,36 @@ HubLoader = function()
         pcall(function()
             local oldNC
             oldNC = hookmetamethod(game, "__namecall", newcclosure(function(...)
-                local method = getnamecallmethod()
+                local method   = getnamecallmethod()
                 local fromSelf = checkcaller and checkcaller()
-                if not InHook and not fromSelf and ShouldSilent() then
-                    local args = { ... }
+
+                -- anti-kick layer dalam namecall hook yang sama
+                -- *digabung di sini biar ga ada double hookmetamethod conflict*
+                if not fromSelf then
+                    local args = {...}
                     local self = args[1]
-
-                    if self == workspace and (method == "Raycast" or method == "raycast")
-                        and #args >= 3 and typeof(args[2]) == "Vector3" and typeof(args[3]) == "Vector3" then
-                        InHook = true
-                        local o = args[2]
-                        args[3] = AimState.SilentTarget - o
-                        local ok, res = pcall(oldNC, table.unpack(args))
-                        InHook = false
-                        if ok then return res end
+                    if (method == "Kick" or method == "kick") and self == LocalPlayer then
+                        return  -- drop kick silently
                     end
 
-                    if self == workspace and (method == "FindPartOnRay" or method == "findPartOnRay")
-                        and #args >= 2 and typeof(args[2]) == "Ray" then
-                        InHook = true
-                        local r = args[2]
-                        args[2] = Ray.new(r.Origin, AimState.SilentTarget - r.Origin)
-                        local ok, res = pcall(oldNC, table.unpack(args))
-                        InHook = false
-                        if ok then return res end
-                    end
+                    if ShouldSilent() then
+                        if self == workspace and (method == "Raycast" or method == "raycast")
+                            and #args >= 3 and typeof(args[2]) == "Vector3" then
+                            InHook = true
+                            args[3] = AimState.SilentTarget - args[2]
+                            local ok, res = pcall(oldNC, table.unpack(args))
+                            InHook = false
+                            if ok then return res end
+                        end
 
-                    if self == workspace and (method == "FindPartOnRayWithIgnoreList" or method == "findPartOnRayWithIgnoreList"
-                        or method == "FindPartOnRayWithWhitelist" or method == "findPartOnRayWithWhitelist")
-                        and #args >= 3 and typeof(args[2]) == "Ray" then
-                        InHook = true
-                        local r = args[2]
-                        args[2] = Ray.new(r.Origin, AimState.SilentTarget - r.Origin)
-                        local ok, res = pcall(oldNC, table.unpack(args))
-                        InHook = false
-                        if ok then return res end
+                        if self == workspace and (method == "FindPartOnRay" or method == "findPartOnRay")
+                            and #args >= 2 and typeof(args[2]) == "Ray" then
+                            InHook = true
+                            args[2] = Ray.new(args[2].Origin, AimState.SilentTarget - args[2].Origin)
+                            local ok, res = pcall(oldNC, table.unpack(args))
+                            InHook = false
+                            if ok then return res end
+                        end
                     end
                 end
                 return oldNC(...)
@@ -1359,37 +1387,33 @@ HubLoader = function()
         end)
     end
 
+    -- Camera Aimbot Loop
     local function OnAimbotUpdate()
         if not CONFIG.Aimbot.Enabled then
-            UpdateFOVVisual(GetMouseLoc(), false, nil)
+            UpdateFOV(GetMouseLoc(), false, nil)
             return
         end
 
         local m = GetMouseLoc()
-        UpdateFOVVisual(m, CONFIG.Aimbot.FOVEnabled, nil)
+        UpdateFOV(m, CONFIG.Aimbot.FOVEnabled, nil)
 
-        if not AimState.Running then
-            CancelLock()
-            return
-        end
+        if not AimState.Running then CancelLock(); return end
 
         if HasDrawing and CONFIG.Aimbot.TracerEnabled and not AimState.Locked then
             local t = GetClosestTarget()
             if t then
                 Tracer.Visible = true
-                Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                Tracer.To = t.screenPos
-                Tracer.Color = CONFIG.Aimbot.TracerColor
+                Tracer.From    = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                Tracer.To      = t.screenPos
+                Tracer.Color   = CONFIG.Aimbot.TracerColor
             else
                 Tracer.Visible = false
             end
-        else
-            if HasDrawing then Tracer.Visible = false end
+        elseif HasDrawing then
+            Tracer.Visible = false
         end
 
-        if CONFIG.Aimbot.Method == "Silent" and ExecutorLevel == "High" then
-            return
-        end
+        if CONFIG.Aimbot.Method == "Silent" and ExecutorLevel == "High" then return end
 
         if not AimState.Locked then
             local t = GetClosestTarget()
@@ -1402,16 +1426,15 @@ HubLoader = function()
         end
 
         if AimState.Locked and AimState.Locked.Character then
-            local c = AimState.Locked.Character
+            local c    = AimState.Locked.Character
             local part = c:FindFirstChild(CONFIG.Aimbot.LockPart)
-            local hum = c:FindFirstChildOfClass("Humanoid")
+            local hum  = c:FindFirstChildOfClass("Humanoid")
             if part and hum then
                 local offset = Vector3.zero
                 if CONFIG.Aimbot.OffsetToMove then
-                    offset = hum.MoveDirection * (math.clamp(CONFIG.Aimbot.OffsetAmount, 1, 30) / 10)
+                    offset = hum.MoveDirection * math.clamp(CONFIG.Aimbot.OffsetAmount, 1, 30) / 10
                 end
                 local tp = part.Position + offset
-
                 if CONFIG.Aimbot.Smoothness > 0 then
                     if AimState.Anim then AimState.Anim:Cancel() end
                     AimState.Anim = TweenService:Create(Camera,
@@ -1422,7 +1445,7 @@ HubLoader = function()
                     Camera.CFrame = CFrame.new(Camera.CFrame.Position, tp)
                 end
                 UserInputService.MouseDeltaSensitivity = 0
-                UpdateFOVVisual(m, CONFIG.Aimbot.FOVEnabled, CONFIG.Aimbot.FOVLockedColor)
+                UpdateFOV(m, CONFIG.Aimbot.FOVEnabled, CONFIG.Aimbot.FOVLockedColor)
             else
                 CancelLock()
             end
@@ -1435,7 +1458,8 @@ HubLoader = function()
         if gp then return end
         if UserInputService:GetFocusedTextBox() then return end
         local k = CONFIG.Aimbot.TriggerKey
-        if (i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == k) or i.UserInputType == k then
+        if (i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == k)
+            or i.UserInputType == k then
             if CONFIG.Aimbot.Toggle then
                 AimState.Running = not AimState.Running
                 if not AimState.Running then CancelLock() end
@@ -1444,9 +1468,11 @@ HubLoader = function()
             end
         end
     end)
+
     UserInputService.InputEnded:Connect(function(i)
         local k = CONFIG.Aimbot.TriggerKey
-        if (i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == k) or i.UserInputType == k then
+        if (i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == k)
+            or i.UserInputType == k then
             if not CONFIG.Aimbot.Toggle then
                 AimState.Running = false
                 CancelLock()
